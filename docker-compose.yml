@@ -67,5 +67,36 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # --- structure-service ---
+  structure-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: structure
+    volumes:
+      - structure_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  structure-service:
+    build: ./backend/structure-service
+    environment:
+      PORT: 3003
+      DB_HOST: structure-db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: structure
+    ports:
+      - "3003:3003"
+    depends_on:
+      structure-db:
+        condition: service_healthy
+
 volumes:
   idea_board_data:
+  structure_data:
