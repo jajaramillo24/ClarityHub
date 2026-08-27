@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ClarityHub distributed backend.
 # Each of the 4 domain services owns its own Postgres instance on purpose:
 # there is no shared database, so one service (or its DB) going down never
