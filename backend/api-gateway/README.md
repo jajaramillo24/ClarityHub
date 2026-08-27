@@ -5,7 +5,7 @@ business logic and no database of its own:
 
 1. **Transparent reverse proxy** (`src/proxy/`) for the three REST-backed
    services — `/ideas*` and `/attachments*` → idea-board-service, `/cards*`
-   → structure-service, `/exports*` → jira-exporter-service. Same path,
+   and `/nfrs*` → structure-service, `/exports*` → jira-exporter-service. Same path,
    same method, same body; the response (status, content-type, body) is
    piped straight back, which is what lets jira-exporter-service's CSV
    download pass through unchanged.
@@ -25,6 +25,7 @@ business logic and no database of its own:
 | `/ideas*`            | idea-board-service                  |
 | `/attachments*`      | idea-board-service                  |
 | `/cards*`             | structure-service                   |
+| `/nfrs*`              | structure-service                   |
 | `/exports*`           | jira-exporter-service               |
 | `POST /ai/summarize`  | requirement_refiner.summarize_ideas |
 | `POST /ai/risks`      | requirement_refiner.analyze_risks   |

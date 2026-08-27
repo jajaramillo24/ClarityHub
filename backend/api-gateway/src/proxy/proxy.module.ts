@@ -3,6 +3,7 @@ import { ProxyService } from './proxy.service';
 import { IdeasProxyController } from './ideas.controller';
 import { AttachmentsProxyController } from './attachments.controller';
 import { CardsProxyController } from './cards.controller';
+import { NfrsProxyController } from './nfrs.controller';
 import { ExportsProxyController } from './exports.controller';
 
 @Module({
@@ -10,6 +11,7 @@ import { ExportsProxyController } from './exports.controller';
     IdeasProxyController,
     AttachmentsProxyController,
     CardsProxyController,
+    NfrsProxyController,
     ExportsProxyController,
   ],
   providers: [ProxyService],

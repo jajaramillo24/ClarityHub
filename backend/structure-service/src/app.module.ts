@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CardsModule } from './cards/cards.module';
+import { NfrsModule } from './nfrs/nfrs.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -21,6 +22,7 @@ import { HealthController } from './health/health.controller';
       }),
     }),
     CardsModule,
+    NfrsModule,
   ],
   controllers: [HealthController],
 })
