@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -35,31 +36,31 @@ export class CardsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateCardDto) {
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCardDto) {
     return this.cardsService.update(id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
+  remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.cardsService.remove(id);
   }
 
   @Post(':id/subtasks')
-  addSubtask(@Param('id') id: string, @Body() dto: CreateSubtaskDto) {
+  addSubtask(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateSubtaskDto) {
     return this.cardsService.addSubtask(id, dto);
   }
 
   @Patch(':id/subtasks/:subtaskId')
   updateSubtask(
-    @Param('id') id: string,
-    @Param('subtaskId') subtaskId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('subtaskId', ParseUUIDPipe) subtaskId: string,
     @Body() dto: UpdateSubtaskDto,
   ) {
     return this.cardsService.updateSubtask(id, subtaskId, dto);
   }
 
   @Delete(':id/subtasks/:subtaskId')
-  removeSubtask(@Param('id') id: string, @Param('subtaskId') subtaskId: string) {
+  removeSubtask(@Param('id', ParseUUIDPipe) id: string, @Param('subtaskId', ParseUUIDPipe) subtaskId: string) {
     return this.cardsService.removeSubtask(id, subtaskId);
   }
 }

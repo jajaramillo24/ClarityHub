@@ -130,6 +130,29 @@ services:
       structure-service:
         condition: service_started
 
+  # --- api-gateway ---
+  # Single entry point for the frontend. Holds no data of its own: pure
+  # proxy for idea-board/structure/jira-exporter, pure RabbitMQ RPC
+  # translation for requirement-refiner. No dependency on the AI-backed
+  # service being up — the gateway itself keeps serving every other route
+  # even when requirement-refiner-service (or RabbitMQ) is stopped.
+  api-gateway:
+    build: ./backend/api-gateway
+    environment:
+      PORT: 3000
+      IDEA_BOARD_SERVICE_URL: http://idea-board-service:3001
+      REQUIREMENT_REFINER_SERVICE_URL: http://requirement-refiner-service:3002
+      STRUCTURE_SERVICE_URL: http://structure-service:3003
+      JIRA_EXPORTER_SERVICE_URL: http://jira-exporter-service:3004
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    ports:
+      - "3000:3000"
+    depends_on:
+      - idea-board-service
+      - structure-service
+      - jira-exporter-service
+      - requirement-refiner-service
+
 volumes:
   idea_board_data:
   structure_data:

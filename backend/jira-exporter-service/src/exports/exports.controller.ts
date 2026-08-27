@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Post,
   Body,
   Res,
@@ -21,7 +22,7 @@ export class ExportsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.exportsService.findOne(id);
   }
 
@@ -31,12 +32,12 @@ export class ExportsController {
   }
 
   @Post(':id/retry')
-  retry(@Param('id') id: string) {
+  retry(@Param('id', ParseUUIDPipe) id: string) {
     return this.exportsService.retry(id);
   }
 
   @Get(':id/download')
-  async download(@Param('id') id: string, @Res() res: Response) {
+  async download(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const job = await this.exportsService.findOne(id);
     if (job.status !== 'completed' || !job.csvContent) {
       throw new BadRequestException(
