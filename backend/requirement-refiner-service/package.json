@@ -1,5 +1,5 @@
 {
-  "name": "idea-board-service",
+  "name": "requirement-refiner-service",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -20,18 +20,21 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.121.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "^11.0.1",
-    "@nestjs/mapped-types": "2.1.1",
+    "@nestjs/microservices": "^11.2.3",
     "@nestjs/platform-express": "^11.0.1",
-    "@nestjs/typeorm": "11.0.3",
+    "amqp-connection-manager": "^5.0.0",
+    "amqplib": "^2.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
-    "pg": "^8.23.0",
+    "mammoth": "^1.12.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "0.3.31"
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

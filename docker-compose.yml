@@ -50,5 +50,22 @@ services:
       idea-board-db:
         condition: service_healthy
 
+  # --- requirement-refiner-service ---
+  # No database of its own — pure request/response over RabbitMQ. This is
+  # the fragile, AI-dependent link the brief calls out: it can be stopped
+  # independently (`docker compose stop requirement-refiner-service`) and
+  # idea-board-service keeps serving traffic untouched.
+  requirement-refiner-service:
+    build: ./backend/requirement-refiner-service
+    environment:
+      PORT: 3002
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    ports:
+      - "3002:3002"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   idea_board_data:
