@@ -32,13 +32,18 @@ export class CardsService {
     return card;
   }
 
-  create(dto: CreateCardDto): Promise<ProjectCard> {
+  async create(dto: CreateCardDto): Promise<ProjectCard> {
     const card = this.cardsRepository.create({
       title: dto.title,
       description: dto.description ?? '',
       status: 'Draft',
     });
-    return this.cardsRepository.save(card);
+    const saved = await this.cardsRepository.save(card);
+    // save() doesn't populate eager relations on a fresh entity — a new
+    // card never has subtasks yet, but leaving the field undefined instead
+    // of [] breaks any caller (the frontend included) that reads
+    // card.subtasks.length without checking for undefined first.
+    return { ...saved, subtasks: [] };
   }
 
   async createMany(dtos: CreateCardDto[]): Promise<ProjectCard[]> {
@@ -49,7 +54,8 @@ export class CardsService {
         status: 'Draft' as const,
       }),
     );
-    return this.cardsRepository.save(cards);
+    const saved = await this.cardsRepository.save(cards);
+    return saved.map((card) => ({ ...card, subtasks: [] }));
   }
 
   async update(id: string, dto: UpdateCardDto): Promise<ProjectCard> {

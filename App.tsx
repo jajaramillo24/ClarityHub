@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Idea, NFR, ProjectCard, CsvColumn, Subtask, Attachment } from './types';
 import { STAGES } from './constants';
-import * as AIService from './services/aiService';
+import * as ApiClient from './services/apiClient';
 import { parse } from 'marked';
 
 // --- Markdown Renderer ---
@@ -118,26 +118,32 @@ const FreeJamView = ({
   const [summary, setSummary] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addIdea = () => {
+  const addIdea = async () => {
     if (!newIdea.trim()) return;
-    setIdeas([...ideas, { id: Date.now().toString(), content: newIdea }]);
+    const content = newIdea;
     setNewIdea('');
+    try {
+      const idea = await ApiClient.createIdea(content);
+      setIdeas([...ideas, idea]);
+    } catch (e) {
+      console.error('Failed to save idea', e);
+      alert('Could not save the idea. Please try again.');
+    }
+  };
+
+  const removeIdea = (id: string) => {
+    setIdeas(ideas.filter(i => i.id !== id));
+    ApiClient.deleteIdea(id).catch(e => console.error('Failed to delete idea', e));
   };
 
   const generateSummary = async () => {
     setLoading(true);
-    let isFirstChunk = true;
     try {
-      await AIService.summarizeIdeas(ideas, attachments, (chunk) => {
-        if (isFirstChunk) {
-          setSummary(chunk); // Replace on first chunk
-          isFirstChunk = false;
-        } else {
-          setSummary(prev => prev + chunk); // Append subsequent chunks
-        }
-      });
+      const result = await ApiClient.summarizeIdeas(ideas, attachments);
+      setSummary(result);
     } catch (e) {
       console.error(e);
+      alert('Failed to generate summary. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -148,19 +154,24 @@ const FreeJamView = ({
       alert('Generate a summary first before creating backlog cards.');
       return;
     }
-    
+
     setGeneratingCards(true);
     try {
-      // Generate both NFRs and Cards in parallel
-      const [newNFRs, newCards] = await Promise.all([
-        AIService.generateNFRsFromSummary(summary, ideas),
-        AIService.generateCardsFromSummary(summary, ideas, nfrs)
+      // Ask requirement-refiner-service for both in parallel...
+      const [newNFRs, newCardStubs] = await Promise.all([
+        ApiClient.generateNfrsFromSummary(summary, ideas),
+        ApiClient.generateCardsFromSummary(summary, ideas, nfrs)
       ]);
-      
-      // Update state with new NFRs and Cards
-      setNfrs([...nfrs, ...newNFRs]);
-      setCards([...cards, ...newCards]);
-      
+
+      // ...then persist the results in structure-service before showing them.
+      const [persistedNfrs, persistedCards] = await Promise.all([
+        ApiClient.bulkCreateNfrs(newNFRs),
+        ApiClient.bulkCreateCards(newCardStubs),
+      ]);
+
+      setNfrs([...nfrs, ...persistedNfrs]);
+      setCards([...cards, ...persistedCards]);
+
       // Navigate to Card Creation stage
       onNavigateToCards();
     } catch (e) {
@@ -174,7 +185,7 @@ const FreeJamView = ({
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      
+
       try {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -186,14 +197,16 @@ const FreeJamView = ({
           reader.readAsDataURL(file);
         });
 
-        const newAttachment: Attachment = {
-          id: Date.now().toString(),
+        // Persist to idea-board-service first so the local id always matches
+        // the one the server knows about (needed for a clean delete later).
+        const saved = await ApiClient.createAttachment({
+          id: '',
           name: file.name,
           mimeType: file.type,
-          base64: base64
-        };
+          base64,
+        });
 
-        setAttachments([...attachments, newAttachment]);
+        setAttachments([...attachments, { id: saved.id, name: file.name, mimeType: file.type, base64 }]);
       } catch (err) {
         console.error("File upload failed", err);
       } finally {
@@ -204,6 +217,7 @@ const FreeJamView = ({
 
   const removeAttachment = (id: string) => {
     setAttachments(attachments.filter(a => a.id !== id));
+    ApiClient.deleteAttachment(id).catch(e => console.error('Failed to delete attachment', e));
   };
 
   return (
@@ -271,7 +285,7 @@ const FreeJamView = ({
              {ideas.map(idea => (
                <div key={idea.id} className="group bg-gray-900/60 border border-white/5 p-4 rounded-2xl hover:bg-gray-800/60 hover:border-clarity-500/30 transition-all flex justify-between items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
                  <p className="text-gray-200 leading-relaxed font-light">{idea.content}</p>
-                 <button onClick={() => setIdeas(ideas.filter(i => i.id !== idea.id))} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                 <button onClick={() => removeIdea(idea.id)} className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1">
                    <Icons.X />
                  </button>
                </div>
@@ -357,36 +371,40 @@ const NfrView = ({
     { id: 'Infrastructure', label: 'Infrastructure', icon: <Icons.Cloud /> },
   ];
 
-  const addNfr = () => {
+  const addNfr = async () => {
     if (!requirementText.trim()) return;
 
-    const newNfr: NFR = {
-      id: Date.now().toString(),
-      category: selectedCategory,
-      title: requirementText,
-      description: descriptionText,
-      impactLevel: selectedPriority
-    };
-    
-    setNfrs([...nfrs, newNfr]);
+    const category = selectedCategory;
+    const title = requirementText;
+    const description = descriptionText;
+    const impactLevel = selectedPriority;
     setRequirementText('');
     setDescriptionText('');
+
+    try {
+      const nfr = await ApiClient.createNfr({ category, title, description, impactLevel });
+      setNfrs([...nfrs, nfr]);
+    } catch (e) {
+      console.error('Failed to save NFR', e);
+      alert('Could not save the requirement. Please try again.');
+    }
   };
 
   const removeNfr = (id: string) => {
     setNfrs(nfrs.filter(n => n.id !== id));
+    ApiClient.deleteNfr(id).catch(e => console.error('Failed to delete NFR', e));
   };
 
   const runAnalysis = async () => {
     setLoading(true);
     setShowAnalysis(true);
-    setRiskAnalysis(''); // Clear previous analysis
+    setRiskAnalysis('');
     try {
-      await AIService.analyzeRisks(nfrs, (chunk) => {
-        setRiskAnalysis(prev => prev + chunk);
-      });
+      const result = await ApiClient.analyzeRisks(nfrs);
+      setRiskAnalysis(result);
     } catch (e) {
       console.error(e);
+      alert('Failed to analyze risks. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -593,27 +611,36 @@ const CardCreationView = ({
   }
 
   // -- Update Logic --
+  // Optimistic local update + fire-and-forget persistence. `subtasks` is
+  // excluded from the PATCH payload — structure-service manages subtasks
+  // through their own endpoints (addSubtask/updateSubtask/removeSubtask
+  // below), not as part of a card PATCH.
   const updateCard = (id: string, updates: Partial<ProjectCard>) => {
     setCards(cards.map(c => c.id === id ? { ...c, ...updates } : c));
+    const { subtasks: _subtasks, id: _id, ...patchable } = updates;
+    if (Object.keys(patchable).length > 0) {
+      ApiClient.updateCard(id, patchable).catch(e => console.error('Failed to save card', e));
+    }
   };
 
-  const createDraft = () => {
+  const createDraft = async () => {
     if(!newTitle.trim()) return;
-    const newCard: ProjectCard = {
-      id: Date.now().toString(),
-      title: newTitle,
-      description: '',
-      acceptanceCriteria: [],
-      subtasks: [],
-      totalStoryPoints: 0,
-      justification: '',
-      labels: [],
-      risks: [],
-      status: 'Draft'
-    };
-    setCards([...cards, newCard]);
-    setActiveCardId(newCard.id);
+    const title = newTitle;
     setNewTitle('');
+    try {
+      const card = await ApiClient.createCard(title);
+      setCards([...cards, card]);
+      setActiveCardId(card.id);
+    } catch (e) {
+      console.error('Failed to create card', e);
+      alert('Could not create the epic. Please try again.');
+    }
+  };
+
+  const deleteCard = (cardId: string) => {
+    setCards(cards.filter(c => c.id !== cardId));
+    if (activeCardId === cardId) setActiveCardId(null);
+    ApiClient.deleteCard(cardId).catch(e => console.error('Failed to delete card', e));
   };
 
   const generateDetails = async (cardId: string) => {
@@ -621,16 +648,32 @@ const CardCreationView = ({
     if (!card) return;
 
     setLoading(true);
-    
+
     try {
       // No streaming for JSON generation - it needs to be complete to parse
-      const generated = await AIService.generateSmartCard(
-        card.title, 
-        ideas, 
+      const generated = await ApiClient.generateSmartCard(
+        card.title,
+        ideas,
         nfrs,
         genSettings
       );
-      updateCard(cardId, { ...generated, status: 'Ready' });
+      const { subtasks: generatedSubtasks, ...scalarFields } = generated;
+
+      let updated = await ApiClient.updateCard(cardId, { ...scalarFields, status: 'Ready' });
+
+      // Subtasks aren't part of the card PATCH contract — create each one
+      // individually against its own endpoint.
+      if (generatedSubtasks && generatedSubtasks.length > 0) {
+        for (const subtask of generatedSubtasks) {
+          updated = await ApiClient.addSubtask(cardId, {
+            title: subtask.title,
+            type: subtask.type,
+            storyPoints: subtask.storyPoints,
+          });
+        }
+      }
+
+      setCards(cards.map(c => c.id === cardId ? updated : c));
     } catch (e) {
       console.error(e);
       alert("Analysis failed.");
@@ -660,25 +703,37 @@ const CardCreationView = ({
     updateCard(cardId, { acceptanceCriteria: card.acceptanceCriteria.filter((_, i) => i !== index) });
   };
 
-  const updateSubtask = (cardId: string, index: number, field: keyof Subtask, value: any) => {
-    const card = cards.find(c => c.id === cardId);
-    if (!card) return;
-    const newSubtasks = [...card.subtasks];
-    newSubtasks[index] = { ...newSubtasks[index], [field]: value };
-    updateCard(cardId, { subtasks: newSubtasks });
+  const updateSubtask = (cardId: string, subtaskId: string, field: keyof Subtask, value: any) => {
+    setCards(cards.map(c => c.id === cardId ? {
+      ...c,
+      subtasks: c.subtasks.map(s => s.id === subtaskId ? { ...s, [field]: value } : s),
+    } : c));
+    ApiClient.updateSubtask(cardId, subtaskId, { [field]: value }).catch(e =>
+      console.error('Failed to update subtask', e)
+    );
   };
 
-  const addSubtask = (cardId: string) => {
-    const card = cards.find(c => c.id === cardId);
-    if (!card) return;
-    const newTask: Subtask = { title: "New Subtask", type: "Backend", storyPoints: 1, completed: false };
-    updateCard(cardId, { subtasks: [...card.subtasks, newTask] });
+  const addSubtask = async (cardId: string) => {
+    try {
+      const updated = await ApiClient.addSubtask(cardId, {
+        title: "New Subtask",
+        type: "Backend",
+        storyPoints: 1,
+      });
+      setCards(cards.map(c => c.id === cardId ? updated : c));
+    } catch (e) {
+      console.error('Failed to add subtask', e);
+    }
   };
 
-  const removeSubtask = (cardId: string, index: number) => {
-    const card = cards.find(c => c.id === cardId);
-    if (!card) return;
-    updateCard(cardId, { subtasks: card.subtasks.filter((_, i) => i !== index) });
+  const removeSubtask = (cardId: string, subtaskId: string) => {
+    setCards(cards.map(c => c.id === cardId
+      ? { ...c, subtasks: c.subtasks.filter(s => s.id !== subtaskId) }
+      : c
+    ));
+    ApiClient.removeSubtask(cardId, subtaskId).catch(e =>
+      console.error('Failed to remove subtask', e)
+    );
   };
 
   const activeCard = cards.find(c => c.id === activeCardId);
@@ -751,10 +806,7 @@ const CardCreationView = ({
                    onClick={(e) => {
                      e.stopPropagation();
                      if (confirm(`Delete epic "${card.title}"?`)) {
-                       setCards(cards.filter(c => c.id !== card.id));
-                       if (activeCardId === card.id) {
-                         setActiveCardId(null);
-                       }
+                       deleteCard(card.id);
                      }
                    }}
                    className={`ml-1 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 ${activeCardId === card.id ? 'text-white/60' : 'text-gray-600'}`}
@@ -855,8 +907,7 @@ const CardCreationView = ({
                     <button
                       onClick={() => {
                         if (confirm(`Delete "${activeCard.title}"?`)) {
-                          setCards(cards.filter(c => c.id !== activeCard.id));
-                          setActiveCardId(null);
+                          deleteCard(activeCard.id);
                         }
                       }}
                       className="bg-white/5 hover:bg-red-900/30 border border-white/10 hover:border-red-500/30 text-gray-400 hover:text-red-300 px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-all"
@@ -963,19 +1014,19 @@ const CardCreationView = ({
                        </button>
                     </div>
                     <div className="space-y-4">
-                      {activeCard.subtasks.map((task, i) => (
-                        <div key={i} className="relative bg-white/[0.02] border border-white/10 rounded-2xl p-5 hover:bg-white/[0.04] hover:border-white/20 transition-all group overflow-hidden">
+                      {activeCard.subtasks.map((task) => (
+                        <div key={task.id} className="relative bg-white/[0.02] border border-white/10 rounded-2xl p-5 hover:bg-white/[0.04] hover:border-white/20 transition-all group overflow-hidden">
                            {/* Glassmorphism accent bar */}
                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-clarity-500 to-clarity-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                           
+
                            <div className="flex gap-4">
                               {/* Left side: Chip + Title */}
                               <div className="flex-1 min-w-0 space-y-3">
                                 {/* Type Badge - Top */}
-                                <select 
+                                <select
                                   className={`text-xs uppercase font-bold px-4 py-2 rounded-2xl border-2 focus:outline-none cursor-pointer tracking-wider transition-all inline-block ${getTypeColor(task.type)}`}
                                   value={task.type}
-                                  onChange={(e) => updateSubtask(activeCard.id, i, 'type', e.target.value)}
+                                  onChange={(e) => updateSubtask(activeCard.id, task.id, 'type', e.target.value)}
                                 >
                                   <option value="Backend">Backend</option>
                                   <option value="Frontend">Frontend</option>
@@ -983,14 +1034,14 @@ const CardCreationView = ({
                                   <option value="DevOps">DevOps</option>
                                   <option value="Docs">Docs</option>
                                 </select>
-                                
+
                                 {/* Title - Bottom */}
-                                <textarea 
+                                <textarea
                                   rows={2}
                                   className="w-full bg-transparent text-sm text-gray-200 font-medium focus:outline-none placeholder-gray-600 resize-none leading-relaxed"
                                   value={task.title}
                                   placeholder="Task title..."
-                                  onChange={(e) => updateSubtask(activeCard.id, i, 'title', e.target.value)}
+                                  onChange={(e) => updateSubtask(activeCard.id, task.id, 'title', e.target.value)}
                                   onInput={(e) => {
                                     const target = e.target as HTMLTextAreaElement;
                                     target.style.height = 'auto';
@@ -998,22 +1049,22 @@ const CardCreationView = ({
                                   }}
                                 />
                               </div>
-                              
+
                               {/* Right side: Story Points + Delete */}
                               <div className="flex flex-col items-end justify-between flex-shrink-0">
                                 <div className="flex items-center gap-2 bg-clarity-900/30 border border-clarity-500/25 rounded-lg px-2.5 py-1.5">
-                                  <input 
+                                  <input
                                     type="number"
                                     min="0"
                                     max="999"
                                     className="w-9 bg-transparent text-xs font-bold text-clarity-300 focus:outline-none text-center font-mono"
                                     value={task.storyPoints}
-                                    onChange={(e) => updateSubtask(activeCard.id, i, 'storyPoints', parseInt(e.target.value) || 0)}
+                                    onChange={(e) => updateSubtask(activeCard.id, task.id, 'storyPoints', parseInt(e.target.value) || 0)}
                                   />
                                   <span className="text-[9px] text-clarity-400 font-medium uppercase tracking-wide">SP</span>
                                 </div>
-                                
-                                <button onClick={() => removeSubtask(activeCard.id, i)} className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 mt-auto">
+
+                                <button onClick={() => removeSubtask(activeCard.id, task.id)} className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 mt-auto">
                                   <Icons.Trash />
                                 </button>
                               </div>
@@ -1116,116 +1167,35 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
     setColumns(columns.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
   };
 
-  const downloadCsv = () => {
-    const enabledCols = columns.filter(c => c.enabled);
-    const headerRow = enabledCols.map(c => `"${c.header}"`).join(delimiter);
-    
-    // Generate rows for parent stories and their subtasks
-    const allRows: string[] = [];
-    
-    readyCards.forEach(card => {
-      // Parent story row
-      const parentRow = enabledCols.map(col => {
-        let val = '';
-        
-        switch(col.field) {
-          case 'issue_type':
-            val = 'Story';
-            break;
-          case 'priority':
-            // Calculate priority based on story points or risks
-            val = card.totalStoryPoints > 13 ? 'High' : card.totalStoryPoints > 5 ? 'Medium' : 'Low';
-            break;
-          case 'labels':
-            val = card.labels.join(', ');
-            break;
-          case 'assignee':
-            val = ''; // Empty, to be assigned in Jira
-            break;
-          case 'parent_id':
-            val = ''; // Parent stories don't have a parent
-            break;
-          case 'acceptanceCriteria':
-            val = card.acceptanceCriteria.join('\n');
-            break;
-          case 'risks':
-            val = card.risks.join('\n');
-            break;
-          case 'subtasks_count':
-            val = card.subtasks.length.toString();
-            break;
-          default:
-            val = String(card[col.field as keyof ProjectCard] || '');
-        }
-        
-        // Escape quotes and newlines for CSV
-        val = val.replace(/"/g, '""');
-        return `"${val}"`;
-      }).join(delimiter);
-      
-      allRows.push(parentRow);
-      
-      // Add subtask rows if enabled
-      if (includeSubtasks && card.subtasks.length > 0) {
-        card.subtasks.forEach(subtask => {
-          const subtaskRow = enabledCols.map(col => {
-            let val = '';
-            
-            switch(col.field) {
-              case 'title':
-                val = subtask.title;
-                break;
-              case 'description':
-                val = `${subtask.type} subtask for: ${card.title}`;
-                break;
-              case 'issue_type':
-                val = 'Sub-task';
-                break;
-              case 'priority':
-                val = 'Medium';
-                break;
-              case 'totalStoryPoints':
-                val = subtask.storyPoints.toString();
-                break;
-              case 'labels':
-                val = `${subtask.type}, Subtask`;
-                break;
-              case 'assignee':
-                val = '';
-                break;
-              case 'parent_id':
-                // In Jira CSV import, this should reference the parent story's key or summary
-                val = card.title;
-                break;
-              case 'acceptanceCriteria':
-                val = '';
-                break;
-              case 'risks':
-                val = '';
-                break;
-              default:
-                val = '';
-            }
-            
-            // Escape quotes and newlines for CSV
-            val = val.replace(/"/g, '""');
-            return `"${val}"`;
-          }).join(delimiter);
-          
-          allRows.push(subtaskRow);
-        });
-      }
-    });
+  const [exporting, setExporting] = useState(false);
 
-    const csvContent = `${headerRow}\n${allRows.join('\n')}`;
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `jira_import_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // CSV generation itself now happens in jira-exporter-service (it needs to
+  // read the live Ready cards from structure-service, not just what this
+  // component has in memory). This just requests the export and downloads
+  // the result it hands back.
+  const downloadCsv = async () => {
+    setExporting(true);
+    try {
+      const job = await ApiClient.createExport({ delimiter, includeSubtasks, columns });
+      if (job.status !== 'completed' || !job.csvContent) {
+        alert(`Export failed: ${job.errorMessage || 'unknown error'}`);
+        return;
+      }
+      const blob = new Blob([job.csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `jira_import_${job.id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export failed', e);
+      alert('Failed to export. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -1238,12 +1208,12 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
               {includeSubtasks && ` + ${readyCards.reduce((sum, c) => sum + c.subtasks.length, 0)} subtasks`}
             </p>
          </div>
-         <button 
+         <button
             onClick={downloadCsv}
-            disabled={readyCards.length === 0}
+            disabled={readyCards.length === 0 || exporting}
             className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-clarity-500/30 text-gray-300 hover:text-white px-6 py-3 rounded-xl transition-all flex items-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
          >
-            <Icons.Download /> Export to Jira CSV
+            <Icons.Download /> {exporting ? 'Exporting...' : 'Export to Jira CSV'}
          </button>
        </div>
 
@@ -1449,12 +1419,28 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
 
 export default function App() {
   const [activeStage, setActiveStage] = useState<Stage>(Stage.FREE_JAM);
-  
+
   // --- Central Application State ---
+  // Ideas, NFRs and cards are persisted server-side (idea-board-service /
+  // structure-service via api-gateway) — this is just the in-memory cache
+  // React renders from, loaded once on mount and kept in sync by each
+  // mutation's own handler. Attachments stay purely local/ephemeral: their
+  // content is only ever needed for the current brainstorming session's AI
+  // calls, so there's no need to reload them from the backend on mount.
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [nfrs, setNfrs] = useState<NFR[]>([]);
   const [cards, setCards] = useState<ProjectCard[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]); // New state
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  useEffect(() => {
+    Promise.all([ApiClient.getIdeas(), ApiClient.getNfrs(), ApiClient.getCards()])
+      .then(([loadedIdeas, loadedNfrs, loadedCards]) => {
+        setIdeas(loadedIdeas);
+        setNfrs(loadedNfrs);
+        setCards(loadedCards);
+      })
+      .catch((e) => console.error('Failed to load data from the backend', e));
+  }, []);
 
   const renderContent = () => {
     switch (activeStage) {

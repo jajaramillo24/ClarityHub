@@ -27,6 +27,7 @@ export interface NFR {
 }
 
 export interface Subtask {
+  id: string;
   title: string;
   type: 'Backend' | 'Frontend' | 'Testing' | 'DevOps' | 'Docs';
   storyPoints: number;
