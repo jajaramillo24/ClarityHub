@@ -97,6 +97,40 @@ services:
       structure-db:
         condition: service_healthy
 
+  # --- jira-exporter-service ---
+  jira-exporter-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jira_exporter
+    volumes:
+      - jira_exporter_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  jira-exporter-service:
+    build: ./backend/jira-exporter-service
+    environment:
+      PORT: 3004
+      DB_HOST: jira-exporter-db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: jira_exporter
+      STRUCTURE_SERVICE_URL: http://structure-service:3003
+    ports:
+      - "3004:3004"
+    depends_on:
+      jira-exporter-db:
+        condition: service_healthy
+      structure-service:
+        condition: service_started
+
 volumes:
   idea_board_data:
   structure_data:
+  jira_exporter_data:
