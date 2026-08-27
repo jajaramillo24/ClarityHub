@@ -1,0 +1,54 @@
+version: "3.9"
+
+# ClarityHub distributed backend.
+# Each of the 4 domain services owns its own Postgres instance on purpose:
+# there is no shared database, so one service (or its DB) going down never
+# takes another one down with it. RabbitMQ is the only shared infrastructure
+# piece, and only requirement-refiner-service depends on it being reachable
+# to do useful work — everything else degrades gracefully without it.
+
+services:
+  # --- Message broker (decouples requirement-refiner from the rest) ---
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- idea-board-service ---
+  idea-board-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: idea_board
+    volumes:
+      - idea_board_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  idea-board-service:
+    build: ./backend/idea-board-service
+    environment:
+      PORT: 3001
+      DB_HOST: idea-board-db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: idea_board
+    ports:
+      - "3001:3001"
+    depends_on:
+      idea-board-db:
+        condition: service_healthy
+
+volumes:
+  idea_board_data:
