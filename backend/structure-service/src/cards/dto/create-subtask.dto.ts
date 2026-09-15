@@ -1,5 +1,5 @@
 import { IsIn, IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
-import type { SubtaskType } from '../subtask.entity';
+import type { SubtaskType } from '../card-types';
 
 const SUBTASK_TYPES: SubtaskType[] = ['Backend', 'Frontend', 'Testing', 'DevOps', 'Docs'];
 

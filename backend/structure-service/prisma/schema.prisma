@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model ProjectCard {
+  id                 String    @id @default(uuid())
+  title              String    @db.VarChar(255)
+  description        String    @default("") @db.Text
+  // Postgres had native text[] for these three — MySQL has no array type,
+  // so they're stored as JSON arrays of strings instead. The API contract
+  // (string[] in/out) doesn't change, only how it's stored.
+  acceptanceCriteria Json      @map("acceptance_criteria")
+  totalStoryPoints   Int       @default(0) @map("total_story_points")
+  justification      String    @default("") @db.Text
+  labels             Json
+  risks              Json
+  status             String    @default("Draft") @db.VarChar(20)
+  subtasks           Subtask[]
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("project_cards")
+}
+
+model Subtask {
+  id          String      @id @default(uuid())
+  title       String      @db.VarChar(255)
+  type        String      @db.VarChar(20)
+  storyPoints Int         @map("story_points")
+  completed   Boolean     @default(false)
+  card        ProjectCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  cardId      String      @map("card_id")
+
+  @@map("subtasks")
+}
+
+model Nfr {
+  id          String   @id @default(uuid())
+  category    String   @db.VarChar(50)
+  title       String   @db.VarChar(255)
+  description String   @default("") @db.Text
+  impactLevel String   @map("impact_level") @db.VarChar(10)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("nfrs")
+}

@@ -1,9 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ExportJob } from './export-job.entity';
+import { Prisma, ExportJob } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateExportDto } from './dto/create-export.dto';
 import { StructureClientService } from '../structure-client/structure-client.service';
+import { CsvColumn } from '../types';
 import { DEFAULT_COLUMNS, generateJiraCsv } from '../csv/csv-generator';
 
 @Injectable()
@@ -11,17 +11,16 @@ export class ExportsService {
   private readonly logger = new Logger(ExportsService.name);
 
   constructor(
-    @InjectRepository(ExportJob)
-    private readonly exportsRepository: Repository<ExportJob>,
+    private readonly prisma: PrismaService,
     private readonly structureClient: StructureClientService,
   ) {}
 
-  findAll(): Promise<ExportJob[]> {
-    return this.exportsRepository.find({ order: { createdAt: 'DESC' } });
+  findAll() {
+    return this.prisma.exportJob.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
   async findOne(id: string): Promise<ExportJob> {
-    const job = await this.exportsRepository.findOne({ where: { id } });
+    const job = await this.prisma.exportJob.findUnique({ where: { id } });
     if (!job) {
       throw new NotFoundException(`Export job ${id} not found`);
     }
@@ -29,13 +28,14 @@ export class ExportsService {
   }
 
   async create(dto: CreateExportDto): Promise<ExportJob> {
-    const job = this.exportsRepository.create({
-      status: 'pending',
-      delimiter: dto.delimiter ?? ';',
-      includeSubtasks: dto.includeSubtasks ?? true,
-      columns: dto.columns ?? DEFAULT_COLUMNS,
+    const job = await this.prisma.exportJob.create({
+      data: {
+        status: 'pending',
+        delimiter: dto.delimiter ?? ';',
+        includeSubtasks: dto.includeSubtasks ?? true,
+        columns: (dto.columns ?? DEFAULT_COLUMNS) as unknown as Prisma.InputJsonValue,
+      },
     });
-    await this.exportsRepository.save(job);
     return this.run(job);
   }
 
@@ -52,24 +52,26 @@ export class ExportsService {
    * failed (usually: structure-service being unreachable) is fixed.
    */
   private async run(job: ExportJob): Promise<ExportJob> {
+    let update: Prisma.ExportJobUpdateInput;
     try {
       const cards = await this.structureClient.fetchReadyCards();
       const csvContent = generateJiraCsv(cards, {
-        delimiter: job.delimiter,
+        delimiter: job.delimiter as ',' | ';',
         includeSubtasks: job.includeSubtasks,
-        columns: job.columns,
+        columns: job.columns as unknown as CsvColumn[],
       });
 
-      job.status = 'completed';
-      job.cardCount = cards.length;
-      job.csvContent = csvContent;
-      job.errorMessage = null;
+      update = {
+        status: 'completed',
+        cardCount: cards.length,
+        csvContent,
+        errorMessage: null,
+      };
     } catch (error) {
       this.logger.error(`Export job ${job.id} failed`, error as Error);
-      job.status = 'failed';
-      job.errorMessage = (error as Error).message;
+      update = { status: 'failed', errorMessage: (error as Error).message };
     }
 
-    return this.exportsRepository.save(job);
+    return this.prisma.exportJob.update({ where: { id: job.id }, data: update });
   }
 }

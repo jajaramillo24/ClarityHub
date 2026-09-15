@@ -13,8 +13,8 @@ dist-ssr
 *.local
 
 # Backend services pin exact dependency versions in package.json itself
-# (see e.g. backend/idea-board-service's @nestjs/typeorm/typeorm pins), so
-# lockfiles aren't required for reproducible installs here. Excluded to
+# (see e.g. backend/idea-board-service's exact @prisma/client/prisma pins),
+# so lockfiles aren't required for reproducible installs here. Excluded to
 # keep pushes to the GitHub API-based remote (this session's git push over
 # the git protocol is blocked by org policy) from having to embed huge
 # generated JSON blobs on every service.

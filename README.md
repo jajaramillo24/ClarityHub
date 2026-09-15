@@ -25,9 +25,9 @@ microservicios NestJS detrás de un API Gateway — ninguna llamada a IA ni escr
 de datos ocurre en el navegador:
 
 ```
-Frontend ──▶ api-gateway ──┬──▶ idea-board-service ──────▶ Postgres (idea_board)
-                            ├──▶ structure-service ───────▶ Postgres (structure)
-                            ├──▶ jira-exporter-service ──▶ Postgres (jira_exporter)
+Frontend ──▶ api-gateway ──┬──▶ idea-board-service ──────▶ MySQL (idea_board)
+                            ├──▶ structure-service ───────▶ MySQL (structure)
+                            ├──▶ jira-exporter-service ──▶ MySQL (jira_exporter)
                             │        │
                             │        └── llama a structure-service (HTTP)
                             └──▶ RabbitMQ ──▶ requirement-refiner-service ──▶ Anthropic Claude
@@ -50,7 +50,7 @@ Cada servicio del backend documenta su propia API en su `README.md`
 ## Tecnología
 
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
-- **Backend**: NestJS 11 (microservicios) + PostgreSQL + RabbitMQ
+- **Backend**: NestJS 11 (microservicios) + Prisma ORM + MySQL + RabbitMQ
 - **IA**: Anthropic Claude (`claude-opus-5`), vía `requirement-refiner-service`
 
 ## Run Locally
@@ -65,7 +65,7 @@ ANTHROPIC_API_KEY=tu-api-key-aqui docker compose up --build
 ```
 
 Esto levanta los 4 microservicios + api-gateway + RabbitMQ + una instancia de
-Postgres por servicio. El frontend (`npm run dev`, ver abajo) apunta a
+MySQL por servicio. El frontend (`npm run dev`, ver abajo) apunta a
 `http://localhost:3000` (api-gateway) por defecto.
 
 ### Solo el frontend

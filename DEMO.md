@@ -5,7 +5,7 @@ sigue funcionando (al menos parcialmente) cuando un servicio individual se
 cae — el requisito no negociable de la cátedra (ver el brief, sección 3).
 
 Todo lo descripto acá fue efectivamente ejecutado y verificado durante el
-desarrollo (con los 5 servicios + RabbitMQ + Postgres corriendo juntos, y
+desarrollo (con los 5 servicios + RabbitMQ + MySQL corriendo juntos, y
 el frontend real en un navegador vía Playwright) — no es un guión teórico.
 
 ## Preparación

@@ -21,9 +21,9 @@ flowchart TB
 
         MQ[["RabbitMQ"]]
 
-        DB1[("Postgres<br/>idea_board")]
-        DB2[("Postgres<br/>structure")]
-        DB3[("Postgres<br/>jira_exporter")]
+        DB1[("MySQL<br/>idea_board")]
+        DB2[("MySQL<br/>structure")]
+        DB3[("MySQL<br/>jira_exporter")]
     end
 
     CLAUDE(["Anthropic Claude API"])
@@ -63,7 +63,7 @@ para el frontend, sin lógica de negocio ni base de datos propia.
 
 ## Por qué esta división (no un monolito)
 
-Cada servicio tiene su propia base de datos Postgres (excepto
+Cada servicio tiene su propia base de datos MySQL (excepto
 `requirement-refiner-service`, que no necesita ninguna) — no hay un
 esquema compartido. Esto es intencional: si la base de datos de un
 servicio se cae o se corrompe, ningún otro servicio se ve afectado, porque
@@ -86,17 +86,18 @@ sólo hace fetch/render.
 
 **Infraestructura** — cada servicio tiene su propio `Dockerfile`
 multi-stage; `docker-compose.yml` en la raíz orquesta los 5 servicios + 3
-Postgres + RabbitMQ como contenedores independientes, cada uno con su
+MySQL + RabbitMQ como contenedores independientes, cada uno con su
 propio healthcheck. Ver `DEMO.md` para el procedimiento de apagar/prender
 un contenedor puntual.
 
-**Procesamiento almacenado** — ideas y adjuntos en `idea_board` (Postgres);
+**Procesamiento almacenado** — ideas y adjuntos en `idea_board` (MySQL);
 épicas, subtareas y NFRs con relaciones (`ProjectCard` 1—N `Subtask`) en
 `structure`; historial de exportaciones (`ExportJob`, con su CSV generado y
-mensaje de error si falló) en `jira_exporter`. Las tres bases usan
-`synchronize: true` de TypeORM para este alcance del PTI — ver la nota en
-cada `app.module.ts` sobre migrar a migraciones formales antes de un uso
-productivo real.
+mensaje de error si falló) en `jira_exporter`. Persistencia vía Prisma ORM
+en los tres; el schema se aplica con `prisma db push` (equivalente al
+`synchronize: true` de un ORM tradicional) para este alcance del PTI — ver
+la nota en cada `README.md` de servicio sobre migrar a
+`prisma migrate deploy` antes de un uso productivo real.
 
 **Distribución / tolerancia a fallos** — ver `DEMO.md`: apagar
 `requirement-refiner-service` dejando el resto operativo fue verificado en

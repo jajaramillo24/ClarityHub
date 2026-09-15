@@ -1,5 +1,5 @@
 import { IsArray, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import type { CardStatus } from '../project-card.entity';
+import type { CardStatus } from '../card-types';
 
 export class UpdateCardDto {
   @IsOptional()

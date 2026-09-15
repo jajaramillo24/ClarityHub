@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model ExportJob {
+  id              String   @id @default(uuid())
+  status          String   @default("pending") @db.VarChar(20)
+  delimiter       String   @db.VarChar(1)
+  includeSubtasks Boolean  @default(true) @map("include_subtasks")
+  // Postgres had jsonb; MySQL's native JSON type is the equivalent here.
+  columns         Json
+  cardCount       Int      @default(0) @map("card_count")
+  // Kept so a completed job can be re-downloaded without re-querying
+  // structure-service, and so a failed job's next retry has something to
+  // compare against.
+  csvContent      String?  @map("csv_content") @db.LongText
+  errorMessage    String?  @map("error_message") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("export_jobs")
+}

@@ -1,5 +1,5 @@
 import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import type { NfrImpactLevel } from '../nfr.entity';
+import type { NfrImpactLevel } from '../nfr-types';
 
 const IMPACT_LEVELS: NfrImpactLevel[] = ['Low', 'Medium', 'High'];
 

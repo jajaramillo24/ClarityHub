@@ -1,46 +1,50 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Nfr } from './nfr.entity';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateNfrDto } from './dto/create-nfr.dto';
 
 @Injectable()
 export class NfrsService {
-  constructor(
-    @InjectRepository(Nfr)
-    private readonly nfrsRepository: Repository<Nfr>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): Promise<Nfr[]> {
-    return this.nfrsRepository.find({ order: { createdAt: 'ASC' } });
+  findAll() {
+    return this.prisma.nfr.findMany({ orderBy: { createdAt: 'asc' } });
   }
 
-  create(dto: CreateNfrDto): Promise<Nfr> {
-    const nfr = this.nfrsRepository.create({
-      category: dto.category,
-      title: dto.title,
-      description: dto.description ?? '',
-      impactLevel: dto.impactLevel,
-    });
-    return this.nfrsRepository.save(nfr);
-  }
-
-  createMany(dtos: CreateNfrDto[]): Promise<Nfr[]> {
-    const nfrs = dtos.map((dto) =>
-      this.nfrsRepository.create({
+  create(dto: CreateNfrDto) {
+    return this.prisma.nfr.create({
+      data: {
         category: dto.category,
         title: dto.title,
         description: dto.description ?? '',
         impactLevel: dto.impactLevel,
-      }),
+      },
+    });
+  }
+
+  createMany(dtos: CreateNfrDto[]) {
+    return this.prisma.$transaction(
+      dtos.map((dto) =>
+        this.prisma.nfr.create({
+          data: {
+            category: dto.category,
+            title: dto.title,
+            description: dto.description ?? '',
+            impactLevel: dto.impactLevel,
+          },
+        }),
+      ),
     );
-    return this.nfrsRepository.save(nfrs);
   }
 
   async remove(id: string): Promise<void> {
-    const result = await this.nfrsRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`NFR ${id} not found`);
+    try {
+      await this.prisma.nfr.delete({ where: { id } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`NFR ${id} not found`);
+      }
+      throw error;
     }
   }
 }

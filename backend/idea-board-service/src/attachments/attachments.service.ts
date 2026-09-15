@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Attachment } from './attachment.entity';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttachmentDto } from './dto/create-attachment.dto';
 
 export interface AttachmentSummary {
@@ -17,21 +16,17 @@ export interface AttachmentWithContent extends AttachmentSummary {
 
 @Injectable()
 export class AttachmentsService {
-  constructor(
-    @InjectRepository(Attachment)
-    private readonly attachmentsRepository: Repository<Attachment>,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(): Promise<AttachmentSummary[]> {
-    const attachments = await this.attachmentsRepository.find({
+  findAll(): Promise<AttachmentSummary[]> {
+    return this.prisma.attachment.findMany({
       select: { id: true, name: true, mimeType: true, createdAt: true },
-      order: { createdAt: 'ASC' },
+      orderBy: { createdAt: 'asc' },
     });
-    return attachments;
   }
 
   async findOne(id: string): Promise<AttachmentWithContent> {
-    const attachment = await this.attachmentsRepository.findOne({ where: { id } });
+    const attachment = await this.prisma.attachment.findUnique({ where: { id } });
     if (!attachment) {
       throw new NotFoundException(`Attachment ${id} not found`);
     }
@@ -40,29 +35,29 @@ export class AttachmentsService {
       name: attachment.name,
       mimeType: attachment.mimeType,
       createdAt: attachment.createdAt,
-      base64: attachment.data.toString('base64'),
+      base64: Buffer.from(attachment.data).toString('base64'),
     };
   }
 
-  async create(dto: CreateAttachmentDto): Promise<AttachmentSummary> {
-    const attachment = this.attachmentsRepository.create({
-      name: dto.name,
-      mimeType: dto.mimeType,
-      data: Buffer.from(dto.base64, 'base64'),
+  create(dto: CreateAttachmentDto): Promise<AttachmentSummary> {
+    return this.prisma.attachment.create({
+      data: {
+        name: dto.name,
+        mimeType: dto.mimeType,
+        data: Buffer.from(dto.base64, 'base64'),
+      },
+      select: { id: true, name: true, mimeType: true, createdAt: true },
     });
-    const saved = await this.attachmentsRepository.save(attachment);
-    return {
-      id: saved.id,
-      name: saved.name,
-      mimeType: saved.mimeType,
-      createdAt: saved.createdAt,
-    };
   }
 
   async remove(id: string): Promise<void> {
-    const result = await this.attachmentsRepository.delete(id);
-    if (result.affected === 0) {
-      throw new NotFoundException(`Attachment ${id} not found`);
+    try {
+      await this.prisma.attachment.delete({ where: { id } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException(`Attachment ${id} not found`);
+      }
+      throw error;
     }
   }
 }

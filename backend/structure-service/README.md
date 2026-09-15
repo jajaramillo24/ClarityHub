@@ -23,6 +23,10 @@ moving part.
   `storyPoints`, `completed`, belongs to one `ProjectCard` (cascade delete)
 - `Nfr`: `id`, `category`, `title`, `description`, `impactLevel` (`Low`/`Medium`/`High`)
 
+`acceptanceCriteria`/`labels`/`risks` are stored as JSON arrays (MySQL has
+no native array type like Postgres does) — the API contract (`string[]`
+in/out) is unchanged.
+
 ## API
 
 | Method | Path                          | Notes                                          |
@@ -46,8 +50,15 @@ moving part.
 ```bash
 cp .env.example .env
 npm install
+npx prisma db push   # creates/syncs the tables (Prisma ORM, MySQL)
 npm run start:dev
 ```
 
-Requires a reachable PostgreSQL instance matching `.env`. Via the
-repo-root `docker-compose.yml`, provisioned automatically as `structure-db`.
+Requires a reachable MySQL/MariaDB instance matching `DATABASE_URL` in
+`.env`. Via the repo-root `docker-compose.yml`, provisioned automatically
+as `structure-db`.
+
+`prisma db push` syncs the schema straight from `schema.prisma`, no migration
+history — fine for this PTI's dev/demo scope. Before any real production use,
+switch to versioned migrations (`prisma migrate dev` locally to generate
+them, `prisma migrate deploy` in CI/deploy).

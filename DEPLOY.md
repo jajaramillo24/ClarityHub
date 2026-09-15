@@ -18,7 +18,7 @@ puedan verse entre sí por la red privada de Railway.
 
 ## 2. Bases de datos (una instancia por servicio, a propósito)
 
-Agregar **3 veces** `+ New → Database → Add PostgreSQL` (una por cada
+Agregar **3 veces** `+ New → Database → Add MySQL` (una por cada
 servicio que necesita persistencia). Nombralas para no confundirlas, por
 ejemplo:
 
@@ -26,9 +26,9 @@ ejemplo:
 - `structure-db`
 - `jira-exporter-db`
 
-Cada una expone automáticamente variables `PGHOST`/`PGPORT`/`PGUSER`/
-`PGPASSWORD`/`PGDATABASE` que vas a referenciar desde el servicio
-correspondiente (paso 4).
+Cada una expone automáticamente variables `MYSQLHOST`/`MYSQLPORT`/
+`MYSQLUSER`/`MYSQLPASSWORD`/`MYSQLDATABASE` (y una `MYSQL_URL` ya armada)
+que vas a referenciar desde el servicio correspondiente (paso 4).
 
 ## 3. RabbitMQ
 
@@ -57,31 +57,19 @@ Por cada uno (`idea-board-service`, `requirement-refiner-service`,
    **idea-board-service**
    ```
    PORT=3001
-   DB_HOST=${{idea-board-db.PGHOST}}
-   DB_PORT=${{idea-board-db.PGPORT}}
-   DB_USERNAME=${{idea-board-db.PGUSER}}
-   DB_PASSWORD=${{idea-board-db.PGPASSWORD}}
-   DB_NAME=${{idea-board-db.PGDATABASE}}
+   DATABASE_URL=mysql://${{idea-board-db.MYSQLUSER}}:${{idea-board-db.MYSQLPASSWORD}}@${{idea-board-db.MYSQLHOST}}:${{idea-board-db.MYSQLPORT}}/${{idea-board-db.MYSQLDATABASE}}
    ```
 
    **structure-service**
    ```
    PORT=3003
-   DB_HOST=${{structure-db.PGHOST}}
-   DB_PORT=${{structure-db.PGPORT}}
-   DB_USERNAME=${{structure-db.PGUSER}}
-   DB_PASSWORD=${{structure-db.PGPASSWORD}}
-   DB_NAME=${{structure-db.PGDATABASE}}
+   DATABASE_URL=mysql://${{structure-db.MYSQLUSER}}:${{structure-db.MYSQLPASSWORD}}@${{structure-db.MYSQLHOST}}:${{structure-db.MYSQLPORT}}/${{structure-db.MYSQLDATABASE}}
    ```
 
    **jira-exporter-service**
    ```
    PORT=3004
-   DB_HOST=${{jira-exporter-db.PGHOST}}
-   DB_PORT=${{jira-exporter-db.PGPORT}}
-   DB_USERNAME=${{jira-exporter-db.PGUSER}}
-   DB_PASSWORD=${{jira-exporter-db.PGPASSWORD}}
-   DB_NAME=${{jira-exporter-db.PGDATABASE}}
+   DATABASE_URL=mysql://${{jira-exporter-db.MYSQLUSER}}:${{jira-exporter-db.MYSQLPASSWORD}}@${{jira-exporter-db.MYSQLHOST}}:${{jira-exporter-db.MYSQLPORT}}/${{jira-exporter-db.MYSQLDATABASE}}
    STRUCTURE_SERVICE_URL=http://${{structure-service.RAILWAY_PRIVATE_DOMAIN}}
    ```
 
@@ -125,10 +113,14 @@ de deploy (push a `main`, o `workflow_dispatch`).
 
 ## Notas
 
-- **Costo**: 3 Postgres + RabbitMQ + 5 servicios es más que el free tier
+- **Costo**: 3 MySQL + RabbitMQ + 5 servicios es más que el free tier
   de Railway suele cubrir sin tarjeta cargada — confirmá el plan antes de
   desplegar todo junto.
-- **`synchronize: true`**: los 3 servicios con base de datos usan
-  sincronización automática de esquema de TypeORM (ver `ARCHITECTURE.md`).
-  Sirve para el alcance de este PTI; para un uso más allá de la entrega,
-  migrar a migraciones formales antes de desplegar en Railway.
+- **`prisma db push`**: los 3 servicios con base de datos sincronizan el
+  esquema directo desde `schema.prisma` con Prisma ORM (ver
+  `ARCHITECTURE.md`), sin historial de migraciones. Sirve para el alcance
+  de este PTI; para un uso más allá de la entrega, migrar a
+  `prisma migrate deploy` (ver la nota en el `README.md` de cada servicio)
+  antes de desplegar en Railway. En Railway esto puede correrse como parte
+  del **Deploy Command** del servicio, o manualmente una vez por `railway
+  run` contra cada base antes del primer deploy.

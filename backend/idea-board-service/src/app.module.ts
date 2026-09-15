@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './prisma/prisma.module';
 import { IdeasModule } from './ideas/ideas.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { HealthController } from './health/health.controller';
@@ -8,21 +8,7 @@ import { HealthController } from './health/health.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    TypeOrmModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: 'postgres',
-        host: config.get<string>('DB_HOST', 'localhost'),
-        port: config.get<number>('DB_PORT', 5432),
-        username: config.get<string>('DB_USERNAME', 'postgres'),
-        password: config.get<string>('DB_PASSWORD', 'postgres'),
-        database: config.get<string>('DB_NAME', 'idea_board'),
-        autoLoadEntities: true,
-        // Fine for this service's own isolated schema during the PTI timeline;
-        // swap for migrations before a real production rollout.
-        synchronize: true,
-      }),
-    }),
+    PrismaModule,
     IdeasModule,
     AttachmentsModule,
   ],

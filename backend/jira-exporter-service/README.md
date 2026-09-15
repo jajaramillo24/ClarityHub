@@ -8,9 +8,9 @@ a downloadable file.
 ## Data model
 
 `ExportJob`: `id`, `status` (`pending`/`completed`/`failed`), `delimiter`,
-`includeSubtasks`, `columns` (jsonb config), `cardCount`, `csvContent`
+`includeSubtasks`, `columns` (JSON config), `cardCount`, `csvContent`
 (kept so a completed job re-downloads without hitting structure-service
-again), `errorMessage`.
+again), `errorMessage`. Persisted via Prisma ORM against MySQL.
 
 Persisting jobs (rather than generating and forgetting) is what makes
 "retry a failed export without losing the backlog" concrete: the backlog
@@ -39,9 +39,15 @@ parent-story-then-subtask row layout, same priority-from-story-points rule
 ```bash
 cp .env.example .env
 npm install
+npx prisma db push   # creates/syncs the export_jobs table (Prisma ORM, MySQL)
 npm run start:dev
 ```
 
-Requires a reachable PostgreSQL instance (`.env`) and structure-service
-(`STRUCTURE_SERVICE_URL`, default `http://localhost:3003`). Via the
-repo-root `docker-compose.yml`, both are provisioned automatically.
+Requires a reachable MySQL/MariaDB instance (`DATABASE_URL` in `.env`) and
+structure-service (`STRUCTURE_SERVICE_URL`, default `http://localhost:3003`).
+Via the repo-root `docker-compose.yml`, both are provisioned automatically.
+
+`prisma db push` syncs the schema straight from `schema.prisma`, no migration
+history — fine for this PTI's dev/demo scope. Before any real production use,
+switch to versioned migrations (`prisma migrate dev` locally to generate
+them, `prisma migrate deploy` in CI/deploy).
