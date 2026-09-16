@@ -9,13 +9,15 @@ datasource db {
 model ProjectCard {
   id                 String    @id @default(uuid())
   title              String    @db.VarChar(255)
-  description        String    @default("") @db.Text
+  // MySQL rejects a DB-level default on TEXT columns, so callers must
+  // always pass a value (empty string, not omitted) — see cards.service.ts.
+  description        String    @db.Text
   // Postgres had native text[] for these three — MySQL has no array type,
   // so they're stored as JSON arrays of strings instead. The API contract
   // (string[] in/out) doesn't change, only how it's stored.
   acceptanceCriteria Json      @map("acceptance_criteria")
   totalStoryPoints   Int       @default(0) @map("total_story_points")
-  justification      String    @default("") @db.Text
+  justification      String    @db.Text
   labels             Json
   risks              Json
   status             String    @default("Draft") @db.VarChar(20)
@@ -42,7 +44,9 @@ model Nfr {
   id          String   @id @default(uuid())
   category    String   @db.VarChar(50)
   title       String   @db.VarChar(255)
-  description String   @default("") @db.Text
+  // MySQL rejects a DB-level default on TEXT columns; nfrs.service.ts
+  // always passes a value (empty string, not omitted) instead.
+  description String   @db.Text
   impactLevel String   @map("impact_level") @db.VarChar(10)
   createdAt   DateTime @default(now()) @map("created_at")
 

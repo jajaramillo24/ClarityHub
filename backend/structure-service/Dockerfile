@@ -23,5 +23,8 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma7.config.ts ./
 EXPOSE 3003
-CMD ["node", "dist/main.js"]
+# `db push` syncs the schema on every boot since there's no migrations
+# folder (see prisma7.config.ts) — a no-op once the DB already matches.
+CMD ["sh", "-c", "npx prisma db push && node dist/main.js"]

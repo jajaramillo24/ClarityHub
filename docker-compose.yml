@@ -36,7 +36,7 @@ services:
     build: ./backend/idea-board-service
     environment:
       PORT: 3001
-      DATABASE_URL: mysql://root:root@idea-board-db:3306/idea_board
+      DATABASE_URL: mysql://root:root@idea-board-db:3306/idea_board?allowPublicKeyRetrieval=true
     ports:
       - "3001:3001"
     depends_on:
@@ -78,7 +78,7 @@ services:
     build: ./backend/structure-service
     environment:
       PORT: 3003
-      DATABASE_URL: mysql://root:root@structure-db:3306/structure
+      DATABASE_URL: mysql://root:root@structure-db:3306/structure?allowPublicKeyRetrieval=true
     ports:
       - "3003:3003"
     depends_on:
@@ -103,7 +103,7 @@ services:
     build: ./backend/jira-exporter-service
     environment:
       PORT: 3004
-      DATABASE_URL: mysql://root:root@jira-exporter-db:3306/jira_exporter
+      DATABASE_URL: mysql://root:root@jira-exporter-db:3306/jira_exporter?allowPublicKeyRetrieval=true
       STRUCTURE_SERVICE_URL: http://structure-service:3003
     ports:
       - "3004:3004"
