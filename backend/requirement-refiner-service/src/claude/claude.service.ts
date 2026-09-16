@@ -45,6 +45,7 @@ Group these concepts into professional Epics or Modules.
 Identify functional requirements and potential technical challenges.
 
 Return a clean Markdown report. Do not use emojis.
+Write the entire report in Spanish (Latin American Spanish), including all headings, labels, and body text.
 
 Brainstormed Notes:
 ${ideasText}`;
@@ -91,7 +92,7 @@ ${ideasText}`;
       .map((n) => `- [${n.category} - ${n.impactLevel} Priority] ${n.title}: ${n.description}`)
       .join('\n');
 
-    const prompt = `Analyze these Non-Functional Requirements. Return a strictly professional Markdown report identifying conflicts and technical risks. Do not use emojis. Use standard bullet points.\n\n${nfrsText}`;
+    const prompt = `Analyze these Non-Functional Requirements. Return a strictly professional Markdown report identifying conflicts and technical risks. Do not use emojis. Use standard bullet points. Write the entire report in Spanish (Latin American Spanish).\n\n${nfrsText}`;
 
     const response = await withRetry(() =>
       this.client.messages.create({
@@ -127,7 +128,11 @@ Executive Summary:
 ${summary}
 
 Generate 3-10 NFRs depending on the summary content. Be specific and actionable.
-Number each NFR title sequentially (e.g., "NFR-1: Authentication", "NFR-2: Response Time", etc.)`;
+Number each NFR title sequentially (e.g., "NFR-1: Autenticación", "NFR-2: Tiempo de Respuesta", etc.) —
+keep the "NFR-<number>:" prefix in that exact format, but write the rest of the title and the
+description in Spanish (Latin American Spanish). Leave the category field as its exact English enum
+value (Security, Performance, Scalability, Accessibility, Privacy, Reliability, Storage, Infrastructure) —
+the frontend maps that value to a translated label for display.`;
 
     const response = await withRetry(() =>
       this.client.messages.parse({
@@ -160,7 +165,7 @@ Number each NFR title sequentially (e.g., "NFR-1: Authentication", "NFR-2: Respo
 Based on the executive summary below, generate a numbered list of Epic/Feature cards for the product backlog.
 
 Extract all major Epics or Features mentioned in the summary and create a simple enumerated card for each.
-Each card should be numbered (e.g., "1. User Authentication", "2. Dashboard Design") and include:
+Each card should be numbered (e.g., "1. Autenticación de Usuarios", "2. Diseño del Dashboard") and include:
 - title: Numbered epic/feature name
 - description: Brief 1-2 sentence description of the epic's purpose
 
@@ -173,7 +178,8 @@ ${nfrsText || 'None specified'}
 Executive Summary:
 ${summary}
 
-Generate between 5-12 enumerated epics depending on the summary content. Number each epic sequentially.`;
+Generate between 5-12 enumerated epics depending on the summary content. Number each epic sequentially.
+Write the title and description in Spanish (Latin American Spanish).`;
 
     const response = await withRetry(() =>
       this.client.messages.parse({
@@ -257,7 +263,10 @@ ${ideasText}
 Technical Constraints:
 ${nfrsText}
 
-Use professional, corporate technical language. Do not use emojis.`;
+Use professional, corporate technical language. Do not use emojis.
+Write all free text (description, acceptance criteria, subtask titles, justification, labels, risks)
+in Spanish (Latin American Spanish). Leave each subtask's "type" field as its exact English enum value
+(Backend, Frontend, Testing, DevOps, or Docs) — the frontend maps that value to a translated label for display.`;
 
     const response = await withRetry(() =>
       this.client.messages.parse({
