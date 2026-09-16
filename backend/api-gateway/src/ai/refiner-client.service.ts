@@ -9,7 +9,11 @@ import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom, TimeoutError } from 'rxjs';
 import { timeout } from 'rxjs/operators';
 
-const REFINER_TIMEOUT_MS = 45000; // Claude calls can legitimately take a while
+// Opus-class, non-streaming report generation (summarize/nfrs/cards) routinely
+// takes 30-60s on its own before RabbitMQ round-trip overhead is even added —
+// 45s was cutting it too close and caused spurious "did not respond in time"
+// errors on real (not just slow) responses. 120s gives real headroom.
+const REFINER_TIMEOUT_MS = 120000;
 
 @Injectable()
 export class RefinerClientService {

@@ -38,6 +38,36 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+// The /ai/* routes can run past a minute of Claude generation time, so the
+// gateway streams heartbeat whitespace ahead of the real JSON to keep the
+// connection alive across proxies/networks that kill long-idle ones — see
+// ai.controller.ts. Because that means the status line is locked at 200
+// before the real outcome is known, success/failure travels in an
+// {ok, data|message} envelope in the body instead of the HTTP status.
+async function requestAI<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const text = (await response.text()).trim();
+  let envelope: { ok: boolean; data?: T; message?: string };
+  try {
+    envelope = JSON.parse(text);
+  } catch {
+    throw new ApiError(`Request to ${path} failed with ${response.status}`, response.status);
+  }
+
+  if (!response.ok || !envelope.ok) {
+    throw new ApiError(
+      envelope.message || `Request to ${path} failed with ${response.status}`,
+      response.status,
+    );
+  }
+  return envelope.data as T;
+}
+
 // ---------------------------------------------------------------------------
 // Ideas & Attachments (idea-board-service)
 // ---------------------------------------------------------------------------
@@ -128,23 +158,21 @@ export const removeSubtask = (cardId: string, subtaskId: string): Promise<Projec
 // ---------------------------------------------------------------------------
 
 export const summarizeIdeas = (ideas: Idea[], attachments: Attachment[]): Promise<string> =>
-  request('/ai/summarize', { method: 'POST', body: JSON.stringify({ ideas, attachments }) });
+  requestAI('/ai/summarize', { ideas, attachments });
 
-export const analyzeRisks = (nfrs: NFR[]): Promise<string> =>
-  request('/ai/risks', { method: 'POST', body: JSON.stringify({ nfrs }) });
+export const analyzeRisks = (nfrs: NFR[]): Promise<string> => requestAI('/ai/risks', { nfrs });
 
 export const generateNfrsFromSummary = (
   summary: string,
   ideas: Idea[],
-): Promise<Omit<NFR, 'id'>[]> =>
-  request('/ai/nfrs', { method: 'POST', body: JSON.stringify({ summary, ideas }) });
+): Promise<Omit<NFR, 'id'>[]> => requestAI('/ai/nfrs', { summary, ideas });
 
 export const generateCardsFromSummary = (
   summary: string,
   ideas: Idea[],
   nfrs: NFR[],
 ): Promise<{ title: string; description: string }[]> =>
-  request('/ai/cards', { method: 'POST', body: JSON.stringify({ summary, ideas, nfrs }) });
+  requestAI('/ai/cards', { summary, ideas, nfrs });
 
 export interface GenerationOptions {
   includeBackend: boolean;
@@ -159,11 +187,7 @@ export const generateSmartCard = (
   ideas: Idea[],
   nfrs: NFR[],
   options: GenerationOptions,
-): Promise<Partial<ProjectCard>> =>
-  request('/ai/smart-card', {
-    method: 'POST',
-    body: JSON.stringify({ title, ideas, nfrs, options }),
-  });
+): Promise<Partial<ProjectCard>> => requestAI('/ai/smart-card', { title, ideas, nfrs, options });
 
 // ---------------------------------------------------------------------------
 // Exports (jira-exporter-service)
