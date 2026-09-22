@@ -1,5 +1,10 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
+import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
 
 @Injectable()
 export class ProxyService {
@@ -12,10 +17,25 @@ export class ProxyService {
    * including binary/text bodies like jira-exporter-service's CSV download,
    * which is why this reads the response as a raw buffer instead of
    * assuming JSON both ways.
+   *
+   * Also forwards the caller's user id (attached to `req.user` by
+   * JwtAuthGuard, which runs before every non-@Public() route) as
+   * X-User-Id — the only thing that lets idea-board/structure/jira-exporter
+   * scope their data per user without each of them re-verifying the JWT.
    */
-  async forward(targetBaseUrl: string, req: Request, res: Response, timeoutMs = 10000): Promise<void> {
+  async forward(
+    targetBaseUrl: string,
+    req: Request,
+    res: Response,
+    timeoutMs = 10000,
+  ): Promise<void> {
     const url = `${targetBaseUrl}${req.originalUrl}`;
     const hasBody = !['GET', 'HEAD', 'DELETE'].includes(req.method);
+    const userId = (req as Request & { user?: AuthenticatedUser }).user?.id;
+
+    const headers: Record<string, string> = {};
+    if (hasBody) headers['content-type'] = 'application/json';
+    if (userId) headers['x-user-id'] = userId;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -23,12 +43,13 @@ export class ProxyService {
     try {
       const response = await fetch(url, {
         method: req.method,
-        headers: hasBody ? { 'content-type': 'application/json' } : undefined,
+        headers,
         body: hasBody ? JSON.stringify(req.body ?? {}) : undefined,
         signal: controller.signal,
       });
 
-      const contentType = response.headers.get('content-type') ?? 'application/json';
+      const contentType =
+        response.headers.get('content-type') ?? 'application/json';
       const contentDisposition = response.headers.get('content-disposition');
       const buffer = Buffer.from(await response.arrayBuffer());
 

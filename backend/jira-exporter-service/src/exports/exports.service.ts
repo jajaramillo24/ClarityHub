@@ -15,32 +15,39 @@ export class ExportsService {
     private readonly structureClient: StructureClientService,
   ) {}
 
-  findAll() {
-    return this.prisma.exportJob.findMany({ orderBy: { createdAt: 'desc' } });
+  findAll(ownerId: string) {
+    return this.prisma.exportJob.findMany({
+      where: { ownerId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
-  async findOne(id: string): Promise<ExportJob> {
-    const job = await this.prisma.exportJob.findUnique({ where: { id } });
+  async findOne(id: string, ownerId: string): Promise<ExportJob> {
+    const job = await this.prisma.exportJob.findFirst({
+      where: { id, ownerId },
+    });
     if (!job) {
       throw new NotFoundException(`Export job ${id} not found`);
     }
     return job;
   }
 
-  async create(dto: CreateExportDto): Promise<ExportJob> {
+  async create(dto: CreateExportDto, ownerId: string): Promise<ExportJob> {
     const job = await this.prisma.exportJob.create({
       data: {
+        ownerId,
         status: 'pending',
         delimiter: dto.delimiter ?? ';',
         includeSubtasks: dto.includeSubtasks ?? true,
-        columns: (dto.columns ?? DEFAULT_COLUMNS) as unknown as Prisma.InputJsonValue,
+        columns: (dto.columns ??
+          DEFAULT_COLUMNS) as unknown as Prisma.InputJsonValue,
       },
     });
     return this.run(job);
   }
 
-  async retry(id: string): Promise<ExportJob> {
-    const job = await this.findOne(id);
+  async retry(id: string, ownerId: string): Promise<ExportJob> {
+    const job = await this.findOne(id, ownerId);
     return this.run(job);
   }
 
@@ -54,7 +61,7 @@ export class ExportsService {
   private async run(job: ExportJob): Promise<ExportJob> {
     let update: Prisma.ExportJobUpdateInput;
     try {
-      const cards = await this.structureClient.fetchReadyCards();
+      const cards = await this.structureClient.fetchReadyCards(job.ownerId);
       const csvContent = generateJiraCsv(cards, {
         delimiter: job.delimiter as ',' | ';',
         includeSubtasks: job.includeSubtasks,
@@ -72,6 +79,9 @@ export class ExportsService {
       update = { status: 'failed', errorMessage: (error as Error).message };
     }
 
-    return this.prisma.exportJob.update({ where: { id: job.id }, data: update });
+    return this.prisma.exportJob.update({
+      where: { id: job.id },
+      data: update,
+    });
   }
 }

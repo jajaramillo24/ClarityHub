@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAttachmentDto } from './dto/create-attachment.dto';
 
@@ -18,15 +17,18 @@ export interface AttachmentWithContent extends AttachmentSummary {
 export class AttachmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(): Promise<AttachmentSummary[]> {
+  findAll(ownerId: string): Promise<AttachmentSummary[]> {
     return this.prisma.attachment.findMany({
+      where: { ownerId },
       select: { id: true, name: true, mimeType: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async findOne(id: string): Promise<AttachmentWithContent> {
-    const attachment = await this.prisma.attachment.findUnique({ where: { id } });
+  async findOne(id: string, ownerId: string): Promise<AttachmentWithContent> {
+    const attachment = await this.prisma.attachment.findFirst({
+      where: { id, ownerId },
+    });
     if (!attachment) {
       throw new NotFoundException(`Attachment ${id} not found`);
     }
@@ -39,25 +41,27 @@ export class AttachmentsService {
     };
   }
 
-  create(dto: CreateAttachmentDto): Promise<AttachmentSummary> {
+  create(
+    dto: CreateAttachmentDto,
+    ownerId: string,
+  ): Promise<AttachmentSummary> {
     return this.prisma.attachment.create({
       data: {
         name: dto.name,
         mimeType: dto.mimeType,
         data: Buffer.from(dto.base64, 'base64'),
+        ownerId,
       },
       select: { id: true, name: true, mimeType: true, createdAt: true },
     });
   }
 
-  async remove(id: string): Promise<void> {
-    try {
-      await this.prisma.attachment.delete({ where: { id } });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`Attachment ${id} not found`);
-      }
-      throw error;
+  async remove(id: string, ownerId: string): Promise<void> {
+    const result = await this.prisma.attachment.deleteMany({
+      where: { id, ownerId },
+    });
+    if (result.count === 0) {
+      throw new NotFoundException(`Attachment ${id} not found`);
     }
   }
 }

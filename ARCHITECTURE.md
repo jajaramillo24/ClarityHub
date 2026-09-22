@@ -21,6 +21,7 @@ flowchart TB
 
         MQ[["RabbitMQ"]]
 
+        DB0[("MySQL<br/>auth")]
         DB1[("MySQL<br/>idea_board")]
         DB2[("MySQL<br/>structure")]
         DB3[("MySQL<br/>jira_exporter")]
@@ -28,7 +29,7 @@ flowchart TB
 
     CLAUDE(["Anthropic Claude API"])
 
-    FE -->|HTTP| GW
+    FE -->|HTTP + JWT| GW
     GW -->|proxy HTTP| IB
     GW -->|proxy HTTP| ST
     GW -->|proxy HTTP| JE
@@ -36,6 +37,7 @@ flowchart TB
     MQ -->|RPC| RR
     RR -->|HTTPS| CLAUDE
 
+    GW --> DB0
     IB --> DB1
     ST --> DB2
     JE --> DB3
@@ -59,7 +61,8 @@ de expuesto directo por el gateway — ver la sección de tolerancia a fallos.
 | Jira Exporter               | `jira-exporter-service`       | Genera el CSV de exportación a partir de lo ya estructurado, con reintentos. |
 
 `api-gateway` no es uno de los 4 módulos — es la puerta de entrada única
-para el frontend, sin lógica de negocio ni base de datos propia.
+para el frontend, sin lógica de negocio propia. Sí tiene una base de datos
+propia (`auth`, ver más abajo): la tabla `users` que respalda el login.
 
 ## Por qué esta división (no un monolito)
 
@@ -105,6 +108,47 @@ vivo (navegador real vía Playwright) durante el desarrollo, no sólo
 diseñado en el papel. `api-gateway` aplica timeout a cada proxy y a la
 llamada RPC, así que un servicio caído nunca cuelga al gateway mismo —
 sólo la ruta que depende de él responde con un error HTTP limpio (503/504).
+
+## Autenticación / autorización
+
+`api-gateway` expone `POST /auth/register` y `POST /auth/login` (tabla
+`users` propia, contraseñas con `bcrypt`, sesión como JWT firmado con
+`JWT_SECRET`). `JwtAuthGuard` está registrado como `APP_GUARD` global, así
+que **toda ruta requiere `Authorization: Bearer <token>` salvo las
+marcadas `@Public()`** (`/auth/register`, `/auth/login`, `/health*`) — ver
+`src/auth/` y `app.module.ts`.
+
+### Aislamiento por usuario (no por "proyecto")
+
+Cada fila de dominio (`Idea`, `Attachment`, `ProjectCard`, `Nfr`,
+`ExportJob`) tiene su propia columna `owner_id` en su base — el id del
+usuario de `api-gateway` que la creó. Alcance deliberadamente acotado para
+el PTI: **aislamiento por usuario, no multi-proyecto**. Un usuario
+logueado tiene un único board/estructura/exports propios; no existe una
+entidad `Project` ni la posibilidad de que dos usuarios compartan o
+colaboren sobre el mismo board. Eso sería el siguiente paso natural, pero
+el brief nunca definió más de un workspace por usuario.
+
+El mecanismo de propagación: `api-gateway` es el único que verifica el
+JWT (`JwtAuthGuard`); una vez identificado el usuario, cada proxy
+(`ProxyService.forward`) reenvía su id como header `X-User-Id` al
+servicio de dominio correspondiente. Cada uno de los tres servicios exige
+ese header en sus rutas de dominio (`OwnerGuard`, `@UseGuards` a nivel de
+controller — no global, para no bloquear su propio `/health`) y filtra
+*toda* query por ese `ownerId`, incluyendo lecturas por id (`findFirst`
+en vez de `findUnique`, para que un id ajeno dé 404 en vez de 200).
+`jira-exporter-service` reenvía el mismo header cuando llama a
+`structure-service` para traer las cards `Ready` de ese usuario — sin
+eso, exportar mezclaría cards de cualquiera.
+
+Esto depende de que ningún llamador salte al gateway: `idea-board-service`,
+`structure-service` y `jira-exporter-service` siguen escuchando en sus
+puertos directamente (ver `docker-compose.yml`, pensado para el demo de
+tolerancia a fallos), así que `OwnerGuard` **confía** en el header en vez
+de volver a verificar el JWT — cualquiera con acceso directo a esos
+puertos puede mandar cualquier `X-User-Id` que quiera. Aceptable dentro de
+una red docker-compose local para el alcance del PTI; en un despliegue
+real esos puertos no deberían quedar expuestos fuera de la red interna.
 
 ## Decisiones de diseño no explícitas en el brief
 

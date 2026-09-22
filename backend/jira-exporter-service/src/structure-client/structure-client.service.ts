@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ProjectCard } from '../types';
 
@@ -13,7 +17,10 @@ export class StructureClientService {
       'STRUCTURE_SERVICE_URL',
       'http://localhost:3003',
     );
-    this.timeoutMs = this.config.get<number>('STRUCTURE_SERVICE_TIMEOUT_MS', 5000);
+    this.timeoutMs = this.config.get<number>(
+      'STRUCTURE_SERVICE_TIMEOUT_MS',
+      5000,
+    );
   }
 
   /**
@@ -24,12 +31,13 @@ export class StructureClientService {
    * losing anything: the backlog itself lives in structure-service's own
    * database, untouched by an export failure here).
    */
-  async fetchReadyCards(): Promise<ProjectCard[]> {
+  async fetchReadyCards(ownerId: string): Promise<ProjectCard[]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}/cards?status=Ready`, {
+        headers: { 'x-user-id': ownerId },
         signal: controller.signal,
       });
 
@@ -39,7 +47,10 @@ export class StructureClientService {
 
       return (await response.json()) as ProjectCard[];
     } catch (error) {
-      this.logger.error('Failed to fetch cards from structure-service', error as Error);
+      this.logger.error(
+        'Failed to fetch cards from structure-service',
+        error as Error,
+      );
       throw new ServiceUnavailableException(
         `Could not reach structure-service: ${(error as Error).message}`,
       );

@@ -8,6 +8,9 @@ datasource db {
 
 model ProjectCard {
   id                 String    @id @default(uuid())
+  // The api-gateway user who owns this card — see the matching note on
+  // idea-board-service's Idea model.
+  ownerId            String    @map("owner_id") @db.VarChar(36)
   title              String    @db.VarChar(255)
   // MySQL rejects a DB-level default on TEXT columns, so callers must
   // always pass a value (empty string, not omitted) — see cards.service.ts.
@@ -25,6 +28,7 @@ model ProjectCard {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 
+  @@index([ownerId])
   @@map("project_cards")
 }
 
@@ -42,6 +46,7 @@ model Subtask {
 
 model Nfr {
   id          String   @id @default(uuid())
+  ownerId     String   @map("owner_id") @db.VarChar(36)
   category    String   @db.VarChar(50)
   title       String   @db.VarChar(255)
   // MySQL rejects a DB-level default on TEXT columns; nfrs.service.ts
@@ -50,5 +55,6 @@ model Nfr {
   impactLevel String   @map("impact_level") @db.VarChar(10)
   createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([ownerId])
   @@map("nfrs")
 }
