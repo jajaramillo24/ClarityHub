@@ -15,16 +15,16 @@ export class ExportsService {
     private readonly structureClient: StructureClientService,
   ) {}
 
-  findAll(ownerId: string) {
+  findAll(projectId: string) {
     return this.prisma.exportJob.findMany({
-      where: { ownerId },
+      where: { projectId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findOne(id: string, ownerId: string): Promise<ExportJob> {
+  async findOne(id: string, projectId: string): Promise<ExportJob> {
     const job = await this.prisma.exportJob.findFirst({
-      where: { id, ownerId },
+      where: { id, projectId },
     });
     if (!job) {
       throw new NotFoundException(`Export job ${id} not found`);
@@ -32,10 +32,10 @@ export class ExportsService {
     return job;
   }
 
-  async create(dto: CreateExportDto, ownerId: string): Promise<ExportJob> {
+  async create(dto: CreateExportDto, projectId: string): Promise<ExportJob> {
     const job = await this.prisma.exportJob.create({
       data: {
-        ownerId,
+        projectId,
         status: 'pending',
         delimiter: dto.delimiter ?? ';',
         includeSubtasks: dto.includeSubtasks ?? true,
@@ -46,8 +46,8 @@ export class ExportsService {
     return this.run(job);
   }
 
-  async retry(id: string, ownerId: string): Promise<ExportJob> {
-    const job = await this.findOne(id, ownerId);
+  async retry(id: string, projectId: string): Promise<ExportJob> {
+    const job = await this.findOne(id, projectId);
     return this.run(job);
   }
 
@@ -61,7 +61,7 @@ export class ExportsService {
   private async run(job: ExportJob): Promise<ExportJob> {
     let update: Prisma.ExportJobUpdateInput;
     try {
-      const cards = await this.structureClient.fetchReadyCards(job.ownerId);
+      const cards = await this.structureClient.fetchReadyCards(job.projectId);
       const csvContent = generateJiraCsv(cards, {
         delimiter: job.delimiter as ',' | ';',
         includeSubtasks: job.includeSubtasks,

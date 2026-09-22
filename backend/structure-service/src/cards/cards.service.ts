@@ -9,17 +9,17 @@ import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 export class CardsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(ownerId: string, status?: string) {
+  findAll(projectId: string, status?: string) {
     return this.prisma.projectCard.findMany({
-      where: status ? { ownerId, status } : { ownerId },
+      where: status ? { projectId, status } : { projectId },
       include: { subtasks: true },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async findOne(id: string, ownerId: string) {
+  async findOne(id: string, projectId: string) {
     const card = await this.prisma.projectCard.findFirst({
-      where: { id, ownerId },
+      where: { id, projectId },
       include: { subtasks: true },
     });
     if (!card) {
@@ -28,10 +28,10 @@ export class CardsService {
     return card;
   }
 
-  create(dto: CreateCardDto, ownerId: string) {
+  create(dto: CreateCardDto, projectId: string) {
     return this.prisma.projectCard.create({
       data: {
-        ownerId,
+        projectId,
         title: dto.title,
         description: dto.description ?? '',
         acceptanceCriteria: [],
@@ -44,12 +44,12 @@ export class CardsService {
     });
   }
 
-  createMany(dtos: CreateCardDto[], ownerId: string) {
+  createMany(dtos: CreateCardDto[], projectId: string) {
     return this.prisma.$transaction(
       dtos.map((dto) =>
         this.prisma.projectCard.create({
           data: {
-            ownerId,
+            projectId,
             title: dto.title,
             description: dto.description ?? '',
             acceptanceCriteria: [],
@@ -64,8 +64,8 @@ export class CardsService {
     );
   }
 
-  async update(id: string, dto: UpdateCardDto, ownerId: string) {
-    await this.findOne(id, ownerId);
+  async update(id: string, dto: UpdateCardDto, projectId: string) {
+    await this.findOne(id, projectId);
     return this.prisma.projectCard.update({
       where: { id },
       data: dto,
@@ -73,31 +73,31 @@ export class CardsService {
     });
   }
 
-  async remove(id: string, ownerId: string): Promise<void> {
+  async remove(id: string, projectId: string): Promise<void> {
     const result = await this.prisma.projectCard.deleteMany({
-      where: { id, ownerId },
+      where: { id, projectId },
     });
     if (result.count === 0) {
       throw new NotFoundException(`Card ${id} not found`);
     }
   }
 
-  async addSubtask(cardId: string, dto: CreateSubtaskDto, ownerId: string) {
-    await this.findOne(cardId, ownerId);
+  async addSubtask(cardId: string, dto: CreateSubtaskDto, projectId: string) {
+    await this.findOne(cardId, projectId);
     await this.prisma.subtask.create({
       data: { ...dto, cardId, completed: false },
     });
-    return this.findOne(cardId, ownerId);
+    return this.findOne(cardId, projectId);
   }
 
   async updateSubtask(
     cardId: string,
     subtaskId: string,
     dto: UpdateSubtaskDto,
-    ownerId: string,
+    projectId: string,
   ) {
     const subtask = await this.prisma.subtask.findFirst({
-      where: { id: subtaskId, cardId, card: { ownerId } },
+      where: { id: subtaskId, cardId, card: { projectId } },
     });
     if (!subtask) {
       throw new NotFoundException(
@@ -105,18 +105,18 @@ export class CardsService {
       );
     }
     await this.prisma.subtask.update({ where: { id: subtaskId }, data: dto });
-    return this.findOne(cardId, ownerId);
+    return this.findOne(cardId, projectId);
   }
 
-  async removeSubtask(cardId: string, subtaskId: string, ownerId: string) {
+  async removeSubtask(cardId: string, subtaskId: string, projectId: string) {
     const result = await this.prisma.subtask.deleteMany({
-      where: { id: subtaskId, cardId, card: { ownerId } },
+      where: { id: subtaskId, cardId, card: { projectId } },
     });
     if (result.count === 0) {
       throw new NotFoundException(
         `Subtask ${subtaskId} not found on card ${cardId}`,
       );
     }
-    return this.findOne(cardId, ownerId);
+    return this.findOne(cardId, projectId);
   }
 }

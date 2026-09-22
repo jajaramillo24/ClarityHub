@@ -31,13 +31,13 @@ export class StructureClientService {
    * losing anything: the backlog itself lives in structure-service's own
    * database, untouched by an export failure here).
    */
-  async fetchReadyCards(ownerId: string): Promise<ProjectCard[]> {
+  async fetchReadyCards(projectId: string): Promise<ProjectCard[]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}/cards?status=Ready`, {
-        headers: { 'x-user-id': ownerId },
+        headers: { 'x-project-id': projectId },
         signal: controller.signal,
       });
 

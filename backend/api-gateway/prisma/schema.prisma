@@ -15,3 +15,16 @@ model User {
 
   @@map("users")
 }
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(255)
+  // The creating user's id — not a Prisma relation, since this is the only
+  // place `User` and `Project` share a database; every other service only
+  // ever sees this as an opaque string forwarded via X-Project-Id.
+  ownerId   String   @map("owner_id") @db.VarChar(36)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ownerId])
+  @@map("projects")
+}

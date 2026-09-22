@@ -7,6 +7,7 @@ import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProjectsModule } from './projects/projects.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -18,6 +19,7 @@ import { HealthController } from './health/health.controller';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60000, limit: 60 }]),
     PrismaModule,
     AuthModule,
+    ProjectsModule,
     ProxyModule,
     AiModule,
   ],

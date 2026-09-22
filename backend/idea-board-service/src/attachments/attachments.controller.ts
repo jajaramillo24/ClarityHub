@@ -10,37 +10,40 @@ import {
 } from '@nestjs/common';
 import { AttachmentsService } from './attachments.service';
 import { CreateAttachmentDto } from './dto/create-attachment.dto';
-import { OwnerGuard } from '../auth/owner.guard';
-import { CurrentOwner } from '../auth/current-owner.decorator';
+import { ProjectGuard } from '../auth/project.guard';
+import { CurrentProject } from '../auth/current-project.decorator';
 
-@UseGuards(OwnerGuard)
+@UseGuards(ProjectGuard)
 @Controller('attachments')
 export class AttachmentsController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Get()
-  findAll(@CurrentOwner() ownerId: string) {
-    return this.attachmentsService.findAll(ownerId);
+  findAll(@CurrentProject() projectId: string) {
+    return this.attachmentsService.findAll(projectId);
   }
 
   @Get(':id')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.attachmentsService.findOne(id, ownerId);
+    return this.attachmentsService.findOne(id, projectId);
   }
 
   @Post()
-  create(@Body() dto: CreateAttachmentDto, @CurrentOwner() ownerId: string) {
-    return this.attachmentsService.create(dto, ownerId);
+  create(
+    @Body() dto: CreateAttachmentDto,
+    @CurrentProject() projectId: string,
+  ) {
+    return this.attachmentsService.create(dto, projectId);
   }
 
   @Delete(':id')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.attachmentsService.remove(id, ownerId);
+    return this.attachmentsService.remove(id, projectId);
   }
 }

@@ -9,6 +9,7 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const TOKEN_KEY = 'clarityhub_token';
+const PROJECT_KEY = 'clarityhub_project_id';
 
 class ApiError extends Error {
   constructor(
@@ -54,13 +55,44 @@ function notifyUnauthorized(): void {
   window.dispatchEvent(new Event('clarityhub:unauthorized'));
 }
 
+// The active project, same storage pattern as the token: every domain
+// route (ideas/attachments/cards/nfrs/exports) requires an X-Project-Id
+// telling the gateway which of the user's own projects to scope the
+// request to (ProjectGuard there checks it's actually theirs before ever
+// proxying downstream).
+function getActiveProjectId(): string | null {
+  try {
+    return localStorage.getItem(PROJECT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeActiveProjectId(id: string): void {
+  try {
+    localStorage.setItem(PROJECT_KEY, id);
+  } catch {
+    /* private browsing / storage disabled — selection just won't persist across reloads */
+  }
+}
+
+function clearActiveProjectId(): void {
+  try {
+    localStorage.removeItem(PROJECT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
+  const projectId = getActiveProjectId();
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(projectId ? { 'X-Project-Id': projectId } : {}),
       ...options.headers,
     },
   });
@@ -159,7 +191,32 @@ export const getCurrentUser = (): Promise<AuthUser> => request('/auth/me');
 
 export const hasStoredSession = (): boolean => getToken() !== null;
 
-export const logout = (): void => clearToken();
+export const logout = (): void => {
+  clearToken();
+  clearActiveProjectId();
+};
+
+// ---------------------------------------------------------------------------
+// Projects (api-gateway's own /projects — a PM can work several projects at
+// once; everything below this point is scoped to whichever one is active)
+// ---------------------------------------------------------------------------
+
+export interface Project {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export const getProjects = (): Promise<Project[]> => request('/projects');
+
+export const createProject = (name: string): Promise<Project> =>
+  request('/projects', { method: 'POST', body: JSON.stringify({ name }) });
+
+export const getActiveProject = (): string | null => getActiveProjectId();
+
+export const setActiveProject = (projectId: string): void => storeActiveProjectId(projectId);
+
+export const clearActiveProject = (): void => clearActiveProjectId();
 
 // ---------------------------------------------------------------------------
 // Ideas & Attachments (idea-board-service)

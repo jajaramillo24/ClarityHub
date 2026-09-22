@@ -17,17 +17,17 @@ export interface AttachmentWithContent extends AttachmentSummary {
 export class AttachmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(ownerId: string): Promise<AttachmentSummary[]> {
+  findAll(projectId: string): Promise<AttachmentSummary[]> {
     return this.prisma.attachment.findMany({
-      where: { ownerId },
+      where: { projectId },
       select: { id: true, name: true, mimeType: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async findOne(id: string, ownerId: string): Promise<AttachmentWithContent> {
+  async findOne(id: string, projectId: string): Promise<AttachmentWithContent> {
     const attachment = await this.prisma.attachment.findFirst({
-      where: { id, ownerId },
+      where: { id, projectId },
     });
     if (!attachment) {
       throw new NotFoundException(`Attachment ${id} not found`);
@@ -43,22 +43,22 @@ export class AttachmentsService {
 
   create(
     dto: CreateAttachmentDto,
-    ownerId: string,
+    projectId: string,
   ): Promise<AttachmentSummary> {
     return this.prisma.attachment.create({
       data: {
         name: dto.name,
         mimeType: dto.mimeType,
         data: Buffer.from(dto.base64, 'base64'),
-        ownerId,
+        projectId,
       },
       select: { id: true, name: true, mimeType: true, createdAt: true },
     });
   }
 
-  async remove(id: string, ownerId: string): Promise<void> {
+  async remove(id: string, projectId: string): Promise<void> {
     const result = await this.prisma.attachment.deleteMany({
-      where: { id, ownerId },
+      where: { id, projectId },
     });
     if (result.count === 0) {
       throw new NotFoundException(`Attachment ${id} not found`);

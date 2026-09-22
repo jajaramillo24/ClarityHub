@@ -5,8 +5,10 @@ import { AttachmentsProxyController } from './attachments.controller';
 import { CardsProxyController } from './cards.controller';
 import { NfrsProxyController } from './nfrs.controller';
 import { ExportsProxyController } from './exports.controller';
+import { ProjectsModule } from '../projects/projects.module';
 
 @Module({
+  imports: [ProjectsModule],
   controllers: [
     IdeasProxyController,
     AttachmentsProxyController,

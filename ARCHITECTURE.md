@@ -118,36 +118,47 @@ que **toda ruta requiere `Authorization: Bearer <token>` salvo las
 marcadas `@Public()`** (`/auth/register`, `/auth/login`, `/health*`) — ver
 `src/auth/` y `app.module.ts`.
 
-### Aislamiento por usuario (no por "proyecto")
+### Aislamiento por proyecto
+
+Un usuario puede tener varios proyectos (un PM real suele trabajar más de
+uno en simultáneo) y sólo ve los que él mismo creó. `api-gateway` tiene su
+propia tabla `projects` (misma base `auth`, `ownerId` → `users.id`) con
+`POST /projects` (crear) y `GET /projects` (listar los propios) —
+`src/projects/`. El frontend guarda cuál es el proyecto activo
+(`localStorage`, mismo patrón que el JWT) y muestra un selector/creador de
+proyecto al loguearse (`ProjectPickerView` en `App.tsx`).
 
 Cada fila de dominio (`Idea`, `Attachment`, `ProjectCard`, `Nfr`,
-`ExportJob`) tiene su propia columna `owner_id` en su base — el id del
-usuario de `api-gateway` que la creó. Alcance deliberadamente acotado para
-el PTI: **aislamiento por usuario, no multi-proyecto**. Un usuario
-logueado tiene un único board/estructura/exports propios; no existe una
-entidad `Project` ni la posibilidad de que dos usuarios compartan o
-colaboren sobre el mismo board. Eso sería el siguiente paso natural, pero
-el brief nunca definió más de un workspace por usuario.
+`ExportJob`) tiene su propia columna `project_id` en su base — no
+`owner_id`: una vez que el gateway verificó que el proyecto pertenece al
+usuario, los servicios de dominio no necesitan saber nada más sobre
+usuarios, sólo sobre proyectos.
 
-El mecanismo de propagación: `api-gateway` es el único que verifica el
-JWT (`JwtAuthGuard`); una vez identificado el usuario, cada proxy
-(`ProxyService.forward`) reenvía su id como header `X-User-Id` al
-servicio de dominio correspondiente. Cada uno de los tres servicios exige
-ese header en sus rutas de dominio (`OwnerGuard`, `@UseGuards` a nivel de
-controller — no global, para no bloquear su propio `/health`) y filtra
-*toda* query por ese `ownerId`, incluyendo lecturas por id (`findFirst`
-en vez de `findUnique`, para que un id ajeno dé 404 en vez de 200).
-`jira-exporter-service` reenvía el mismo header cuando llama a
-`structure-service` para traer las cards `Ready` de ese usuario — sin
-eso, exportar mezclaría cards de cualquiera.
+El mecanismo de propagación, en dos capas:
+
+1. **Gateway → dominio**: `JwtAuthGuard` verifica el JWT; `ProjectGuard`
+   (`src/projects/project.guard.ts`, aplicado a los proxy controllers de
+   `/ideas`, `/attachments`, `/cards`, `/nfrs`, `/exports` — no global, para
+   no exigirlo en `/projects` ni `/auth`) exige un header `X-Project-Id` del
+   frontend y comprueba que ese proyecto sea del usuario autenticado
+   (`ProjectsService.findOne`, 404 si no es suyo). Recién ahí
+   `ProxyService.forward` reenvía ese id, ya verificado, al servicio de
+   dominio correspondiente.
+2. **Dentro de cada servicio de dominio**: su propio `ProjectGuard` (mismo
+   nombre, implementación más simple — sólo exige el header, no lo
+   revalida) filtra *toda* query por ese `projectId`, incluyendo lecturas
+   por id (`findFirst` en vez de `findUnique`, para que un id ajeno dé 404
+   en vez de 200). `jira-exporter-service` reenvía el mismo header cuando
+   llama a `structure-service` para traer las cards `Ready` de ese
+   proyecto — sin eso, exportar mezclaría cards de cualquier proyecto.
 
 Esto depende de que ningún llamador salte al gateway: `idea-board-service`,
 `structure-service` y `jira-exporter-service` siguen escuchando en sus
 puertos directamente (ver `docker-compose.yml`, pensado para el demo de
-tolerancia a fallos), así que `OwnerGuard` **confía** en el header en vez
-de volver a verificar el JWT — cualquiera con acceso directo a esos
-puertos puede mandar cualquier `X-User-Id` que quiera. Aceptable dentro de
-una red docker-compose local para el alcance del PTI; en un despliegue
+tolerancia a fallos), así que su `ProjectGuard` **confía** en el header en
+vez de volver a verificar nada — cualquiera con acceso directo a esos
+puertos puede mandar cualquier `X-Project-Id` que quiera. Aceptable dentro
+de una red docker-compose local para el alcance del PTI; en un despliegue
 real esos puertos no deberían quedar expuestos fuera de la red interna.
 
 ## Seguridad de API

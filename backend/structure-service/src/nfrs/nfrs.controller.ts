@@ -11,34 +11,37 @@ import {
 import { NfrsService } from './nfrs.service';
 import { CreateNfrDto } from './dto/create-nfr.dto';
 import { BulkCreateNfrsDto } from './dto/bulk-create-nfrs.dto';
-import { OwnerGuard } from '../auth/owner.guard';
-import { CurrentOwner } from '../auth/current-owner.decorator';
+import { ProjectGuard } from '../auth/project.guard';
+import { CurrentProject } from '../auth/current-project.decorator';
 
-@UseGuards(OwnerGuard)
+@UseGuards(ProjectGuard)
 @Controller('nfrs')
 export class NfrsController {
   constructor(private readonly nfrsService: NfrsService) {}
 
   @Get()
-  findAll(@CurrentOwner() ownerId: string) {
-    return this.nfrsService.findAll(ownerId);
+  findAll(@CurrentProject() projectId: string) {
+    return this.nfrsService.findAll(projectId);
   }
 
   @Post()
-  create(@Body() dto: CreateNfrDto, @CurrentOwner() ownerId: string) {
-    return this.nfrsService.create(dto, ownerId);
+  create(@Body() dto: CreateNfrDto, @CurrentProject() projectId: string) {
+    return this.nfrsService.create(dto, projectId);
   }
 
   @Post('bulk')
-  createMany(@Body() dto: BulkCreateNfrsDto, @CurrentOwner() ownerId: string) {
-    return this.nfrsService.createMany(dto.nfrs, ownerId);
+  createMany(
+    @Body() dto: BulkCreateNfrsDto,
+    @CurrentProject() projectId: string,
+  ) {
+    return this.nfrsService.createMany(dto.nfrs, projectId);
   }
 
   @Delete(':id')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.nfrsService.remove(id, ownerId);
+    return this.nfrsService.remove(id, projectId);
   }
 }
