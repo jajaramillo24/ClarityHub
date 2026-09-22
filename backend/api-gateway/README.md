@@ -1,25 +1,29 @@
 # api-gateway
 
 Single entry point the frontend talks to. It holds no business logic of
-its own beyond one thing — login — plus three jobs:
+its own beyond two things — login and projects — plus two proxy jobs:
 
-0. **Authentication** (`src/auth/`) — its own `users` table (Prisma/MySQL,
-   the only database this service owns) backs `POST /auth/register` and
-   `POST /auth/login`, which return a JWT. `JwtAuthGuard` is registered
-   globally (`APP_GUARD` in `app.module.ts`), so every route below requires
-   `Authorization: Bearer <token>` by default; routes opt out individually
-   with `@Public()` (currently just `/auth/register`, `/auth/login` and
-   `/health*`). Once identified, the caller's user id is forwarded to every
-   downstream service as `X-User-Id` (see point 1) — that's what lets each
-   of them scope its own data per user, since none of them verify the JWT
-   themselves. See "Autenticación / autorización" in `ARCHITECTURE.md`.
+0. **Authentication & projects** (`src/auth/`, `src/projects/`) — its own
+   `users` and `projects` tables (Prisma/MySQL, the only database this
+   service owns). `POST /auth/register` and `POST /auth/login` return a
+   JWT; `JwtAuthGuard` is registered globally (`APP_GUARD` in
+   `app.module.ts`), so every route below requires
+   `Authorization: Bearer <token>` by default, with `@Public()` opting out
+   individually (`/auth/register`, `/auth/login`, `/health*`). A user can
+   own several projects (`POST /projects`, `GET /projects`); the frontend
+   picks one and sends it as `X-Project-Id` on every domain request, and
+   `ProjectGuard` (`src/projects/project.guard.ts`, applied to the proxy
+   controllers in point 1 — not `/projects` or `/auth` themselves) checks
+   that project actually belongs to the caller before anything gets
+   proxied downstream. See "Autenticación / autorización" in
+   `ARCHITECTURE.md`.
 1. **Transparent reverse proxy** (`src/proxy/`) for the three REST-backed
    services — `/ideas*` and `/attachments*` → idea-board-service, `/cards*`
    and `/nfrs*` → structure-service, `/exports*` → jira-exporter-service. Same path,
-   same method, same body, plus an `X-User-Id` header carrying the
-   authenticated user's id (from step 0); the response (status,
-   content-type, body) is piped straight back, which is what lets
-   jira-exporter-service's CSV download pass through unchanged.
+   same method, same body, plus the verified `X-Project-Id` header (from
+   step 0); the response (status, content-type, body) is piped straight
+   back, which is what lets jira-exporter-service's CSV download pass
+   through unchanged.
 2. **Protocol translation** (`src/ai/`) for requirement-refiner-service:
    `/ai/*` HTTP requests become RabbitMQ RPC calls
    (`requirement_refiner_queue`), bounded by a 45s timeout
@@ -36,11 +40,13 @@ its own beyond one thing — login — plus three jobs:
 | `POST /auth/register` | Creates a user, returns `{ accessToken, user }` — public |
 | `POST /auth/login`    | Verifies credentials, returns `{ accessToken, user }` — public |
 | `GET /auth/me`        | Current user from the bearer token |
-| `/ideas*`            | idea-board-service                  |
-| `/attachments*`      | idea-board-service                  |
-| `/cards*`             | structure-service                   |
-| `/nfrs*`              | structure-service                   |
-| `/exports*`           | jira-exporter-service               |
+| `GET /projects`       | Lists the caller's own projects |
+| `POST /projects`      | `{ name }` — creates a project owned by the caller |
+| `/ideas*`            | idea-board-service (requires `X-Project-Id`) |
+| `/attachments*`      | idea-board-service (requires `X-Project-Id`) |
+| `/cards*`             | structure-service (requires `X-Project-Id`) |
+| `/nfrs*`              | structure-service (requires `X-Project-Id`) |
+| `/exports*`           | jira-exporter-service (requires `X-Project-Id`) |
 | `POST /ai/summarize`  | requirement_refiner.summarize_ideas |
 | `POST /ai/risks`      | requirement_refiner.analyze_risks   |
 | `POST /ai/nfrs`       | requirement_refiner.generate_nfrs   |

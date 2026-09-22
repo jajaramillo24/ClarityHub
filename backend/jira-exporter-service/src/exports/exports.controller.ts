@@ -12,47 +12,47 @@ import {
 import type { Response } from 'express';
 import { ExportsService } from './exports.service';
 import { CreateExportDto } from './dto/create-export.dto';
-import { OwnerGuard } from '../auth/owner.guard';
-import { CurrentOwner } from '../auth/current-owner.decorator';
+import { ProjectGuard } from '../auth/project.guard';
+import { CurrentProject } from '../auth/current-project.decorator';
 
-@UseGuards(OwnerGuard)
+@UseGuards(ProjectGuard)
 @Controller('exports')
 export class ExportsController {
   constructor(private readonly exportsService: ExportsService) {}
 
   @Get()
-  findAll(@CurrentOwner() ownerId: string) {
-    return this.exportsService.findAll(ownerId);
+  findAll(@CurrentProject() projectId: string) {
+    return this.exportsService.findAll(projectId);
   }
 
   @Get(':id')
   findOne(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.exportsService.findOne(id, ownerId);
+    return this.exportsService.findOne(id, projectId);
   }
 
   @Post()
-  create(@Body() dto: CreateExportDto, @CurrentOwner() ownerId: string) {
-    return this.exportsService.create(dto, ownerId);
+  create(@Body() dto: CreateExportDto, @CurrentProject() projectId: string) {
+    return this.exportsService.create(dto, projectId);
   }
 
   @Post(':id/retry')
   retry(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.exportsService.retry(id, ownerId);
+    return this.exportsService.retry(id, projectId);
   }
 
   @Get(':id/download')
   async download(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
     @Res() res: Response,
   ) {
-    const job = await this.exportsService.findOne(id, ownerId);
+    const job = await this.exportsService.findOne(id, projectId);
     if (job.status !== 'completed' || !job.csvContent) {
       throw new BadRequestException(
         `Export job ${id} is not completed (status: ${job.status})`,

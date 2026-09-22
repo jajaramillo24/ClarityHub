@@ -6,17 +6,17 @@ import { CreateNfrDto } from './dto/create-nfr.dto';
 export class NfrsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(ownerId: string) {
+  findAll(projectId: string) {
     return this.prisma.nfr.findMany({
-      where: { ownerId },
+      where: { projectId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  create(dto: CreateNfrDto, ownerId: string) {
+  create(dto: CreateNfrDto, projectId: string) {
     return this.prisma.nfr.create({
       data: {
-        ownerId,
+        projectId,
         category: dto.category,
         title: dto.title,
         description: dto.description ?? '',
@@ -25,12 +25,12 @@ export class NfrsService {
     });
   }
 
-  createMany(dtos: CreateNfrDto[], ownerId: string) {
+  createMany(dtos: CreateNfrDto[], projectId: string) {
     return this.prisma.$transaction(
       dtos.map((dto) =>
         this.prisma.nfr.create({
           data: {
-            ownerId,
+            projectId,
             category: dto.category,
             title: dto.title,
             description: dto.description ?? '',
@@ -41,8 +41,10 @@ export class NfrsService {
     );
   }
 
-  async remove(id: string, ownerId: string): Promise<void> {
-    const result = await this.prisma.nfr.deleteMany({ where: { id, ownerId } });
+  async remove(id: string, projectId: string): Promise<void> {
+    const result = await this.prisma.nfr.deleteMany({
+      where: { id, projectId },
+    });
     if (result.count === 0) {
       throw new NotFoundException(`NFR ${id} not found`);
     }

@@ -29,14 +29,26 @@ REG=$(curl -s -X POST http://localhost:3000/auth/register \
   -d '{"email":"demo@example.com","password":"demo-password"}')
 echo "$REG" | python3 -m json.tool
 TOKEN=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
-USER_ID=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin)['user']['id'])")
 ```
 
-Los datos de cada usuario están aislados (`ownerId` en cada fila, en las
-tres bases) — los curls de `/exports` en la Demo 2 le pegan directo a
+Un usuario puede tener varios proyectos (ver "Aislamiento por proyecto" en
+`ARCHITECTURE.md`); creá uno para la demo y guardá su id:
+
+```bash
+PROJ=$(curl -s -X POST http://localhost:3000/projects \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"Demo"}')
+echo "$PROJ" | python3 -m json.tool
+PROJECT_ID=$(echo "$PROJ" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+```
+
+Los datos de cada proyecto están aislados (`projectId` en cada fila, en
+las tres bases) — los curls de `/exports` en la Demo 2 le pegan directo a
 jira-exporter-service (puerto 3004), no al gateway, así que no llevan
 `Authorization`, pero como cualquier ruta de dominio sí necesitan el
-header `X-User-Id: $USER_ID` para saber de qué usuario es cada fila.
+header `X-Project-Id: $PROJECT_ID` para saber de qué proyecto es cada
+fila. Si usás el frontend en vez de `curl`, el mismo proyecto se elige o
+se crea desde la pantalla que aparece después de loguearse.
 
 Verificar que todo está arriba:
 
@@ -104,7 +116,7 @@ Exporter falla, el backlog ya estructurado no debe perderse".
 
 3. Verificar que el intento fallido quedó registrado, no perdido:
    ```bash
-   curl -s http://localhost:3004/exports -H "X-User-Id: $USER_ID" | python3 -m json.tool
+   curl -s http://localhost:3004/exports -H "X-Project-Id: $PROJECT_ID" | python3 -m json.tool
    ```
    El job más reciente debería tener `"status": "failed"` con un
    `errorMessage` describiendo el problema — y **sin** haber perdido el
@@ -118,7 +130,7 @@ Exporter falla, el backlog ya estructurado no debe perderse".
 
 5. Reintentar el mismo job (reemplazar `<id>` por el id del paso 3):
    ```bash
-   curl -s -X POST http://localhost:3004/exports/<id>/retry -H "X-User-Id: $USER_ID" | python3 -m json.tool
+   curl -s -X POST http://localhost:3004/exports/<id>/retry -H "X-Project-Id: $PROJECT_ID" | python3 -m json.tool
    ```
    Debería volver `"status": "completed"` con el CSV generado — mismo job,
    sin haber tenido que reconstruir nada.

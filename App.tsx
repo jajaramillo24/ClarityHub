@@ -183,6 +183,90 @@ const AuthView = ({ onAuthenticated }: { onAuthenticated: (user: ApiClient.AuthU
   );
 };
 
+// --- Projects ---
+// A PM can run several projects at once; every domain route requires an
+// active one (X-Project-Id — see apiClient.ts and api-gateway's
+// ProjectGuard), so this gates the app the same way AuthView does: nothing
+// useful to show until a project is picked or created.
+const ProjectPickerView = ({
+  projects, onSelect, onCreated,
+}: {
+  projects: ApiClient.Project[];
+  onSelect: (projectId: string) => void;
+  onCreated: (project: ApiClient.Project) => void;
+}) => {
+  const [name, setName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setCreating(true);
+    setError('');
+    try {
+      const project = await ApiClient.createProject(name.trim());
+      onCreated(project);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="flex h-screen items-center justify-center bg-[#030712] text-gray-100 p-4">
+      <div className="w-full max-w-md bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-8">
+        <div className="flex flex-col items-center gap-3 mb-6">
+          <img src={`${import.meta.env.BASE_URL}clarity_logo.png`} alt="ClarityHub Logo" className="w-40 drop-shadow-lg" />
+          <div className="flex items-center gap-2 text-gray-400">
+            <Icons.Kanban />
+            <span className="text-sm">Choose a project to continue</span>
+          </div>
+        </div>
+
+        {projects.length > 0 && (
+          <div className="space-y-2 mb-6 max-h-56 overflow-y-auto">
+            {projects.map((project) => (
+              <button
+                key={project.id}
+                onClick={() => onSelect(project.id)}
+                className="w-full text-left bg-black/30 hover:bg-black/50 border border-white/10 hover:border-clarity-500 rounded-xl px-4 py-3 text-sm text-gray-100 transition-colors"
+              >
+                {project.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <form onSubmit={submit} className="space-y-3">
+          <p className="text-xs text-gray-500 uppercase tracking-wide">
+            {projects.length > 0 ? 'Or create a new one' : 'Create your first project'}
+          </p>
+          <input
+            type="text"
+            required
+            placeholder="Project name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-clarity-500"
+          />
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={creating}
+            className="w-full bg-clarity-600 hover:bg-clarity-500 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 text-sm transition-colors"
+          >
+            {creating ? 'Creating…' : 'Create project'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 const FreeJamView = ({
   ideas, setIdeas, attachments, setAttachments, cards, setCards, nfrs, setNfrs, onNavigateToCards
 }: { 
@@ -1526,22 +1610,58 @@ export default function App() {
   const logout = () => {
     ApiClient.logout();
     setAuthUser(null);
+    setProjects([]);
+    setActiveProjectId(null);
+  };
+
+  // --- Project gate ---
+  // A PM can have several projects; everything below is scoped to
+  // whichever one is active (X-Project-Id, attached by apiClient.ts).
+  // `projectsChecked` plays the same role `authChecked` does above — avoids
+  // flashing the picker while a stored project id is still being validated
+  // against the freshly-fetched project list.
+  const [projects, setProjects] = useState<ApiClient.Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [projectsChecked, setProjectsChecked] = useState(false);
+
+  useEffect(() => {
+    if (!authUser) return;
+    setProjectsChecked(false);
+    ApiClient.getProjects()
+      .then((loaded) => {
+        setProjects(loaded);
+        const stored = ApiClient.getActiveProject();
+        setActiveProjectId(stored && loaded.some((p) => p.id === stored) ? stored : null);
+      })
+      .catch((e) => console.error('Failed to load projects', e))
+      .finally(() => setProjectsChecked(true));
+  }, [authUser]);
+
+  const selectProject = (projectId: string) => {
+    ApiClient.setActiveProject(projectId);
+    setActiveProjectId(projectId);
+  };
+
+  const switchProject = () => {
+    ApiClient.clearActiveProject();
+    setActiveProjectId(null);
   };
 
   // --- Central Application State ---
   // Ideas, NFRs and cards are persisted server-side (idea-board-service /
   // structure-service via api-gateway) — this is just the in-memory cache
-  // React renders from, loaded once on mount and kept in sync by each
-  // mutation's own handler. Attachments stay purely local/ephemeral: their
-  // content is only ever needed for the current brainstorming session's AI
-  // calls, so there's no need to reload them from the backend on mount.
+  // React renders from, loaded once per active project and kept in sync by
+  // each mutation's own handler. Attachments stay purely local/ephemeral:
+  // their content is only ever needed for the current brainstorming
+  // session's AI calls, so there's no need to reload them from the backend
+  // on mount.
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [nfrs, setNfrs] = useState<NFR[]>([]);
   const [cards, setCards] = useState<ProjectCard[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!activeProjectId) return;
     Promise.all([ApiClient.getIdeas(), ApiClient.getNfrs(), ApiClient.getCards()])
       .then(([loadedIdeas, loadedNfrs, loadedCards]) => {
         setIdeas(loadedIdeas);
@@ -1549,7 +1669,7 @@ export default function App() {
         setCards(loadedCards);
       })
       .catch((e) => console.error('Failed to load data from the backend', e));
-  }, [authUser]);
+  }, [activeProjectId]);
 
   if (!authChecked) {
     return <div className="h-screen bg-[#030712]" />;
@@ -1558,6 +1678,25 @@ export default function App() {
   if (!authUser) {
     return <AuthView onAuthenticated={setAuthUser} />;
   }
+
+  if (!projectsChecked) {
+    return <div className="h-screen bg-[#030712]" />;
+  }
+
+  if (!activeProjectId) {
+    return (
+      <ProjectPickerView
+        projects={projects}
+        onSelect={selectProject}
+        onCreated={(project) => {
+          setProjects([...projects, project]);
+          selectProject(project.id);
+        }}
+      />
+    );
+  }
+
+  const activeProjectName = projects.find((p) => p.id === activeProjectId)?.name ?? '';
 
   const renderContent = () => {
     switch (activeStage) {
@@ -1630,13 +1769,17 @@ export default function App() {
         </nav>
 
         <div className="p-4 border-t border-white/10 hidden lg:block relative z-10 space-y-2">
-           <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/20">
+           <button
+             onClick={switchProject}
+             className="w-full text-left bg-white/10 hover:bg-white/15 rounded-xl p-3 backdrop-blur-sm border border-white/20 transition-colors"
+             title="Switch project"
+           >
               <div className="flex items-center gap-2 mb-1">
                  <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)] animate-pulse"></div>
-                 <span className="text-[10px] text-white/90 uppercase tracking-widest font-bold">System Online</span>
+                 <span className="text-[10px] text-white/90 uppercase tracking-widest font-bold">Project</span>
               </div>
-              <p className="text-[10px] text-white/60 font-mono mt-1">v2.5.0-ent</p>
-           </div>
+              <p className="text-xs text-white/80 truncate">{activeProjectName}</p>
+           </button>
            <button
              onClick={logout}
              className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors text-xs"

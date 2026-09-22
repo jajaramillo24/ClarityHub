@@ -7,7 +7,7 @@ a downloadable file.
 
 ## Data model
 
-`ExportJob`: `id`, `ownerId`, `status` (`pending`/`completed`/`failed`),
+`ExportJob`: `id`, `projectId`, `status` (`pending`/`completed`/`failed`),
 `delimiter`, `includeSubtasks`, `columns` (JSON config), `cardCount`,
 `csvContent` (kept so a completed job re-downloads without hitting
 structure-service again), `errorMessage`. Persisted via Prisma ORM against
@@ -21,7 +21,7 @@ regeneration of anything upstream.
 
 ## API
 
-Every route below requires an `X-User-Id` header — see "Ownership".
+Every route below requires an `X-Project-Id` header — see "Ownership".
 
 | Method | Path                  | Notes                                                |
 |--------|-----------------------|--------------------------------------------------------|
@@ -39,17 +39,18 @@ parent-story-then-subtask row layout, same priority-from-story-points rule
 
 ## Ownership
 
-Same model as the other two domain services: api-gateway verifies the JWT
-and forwards the user id as `X-User-Id`; `OwnerGuard` (`src/auth/`)
-requires that header on every controller here. Every job is scoped to its
-`ownerId`, and `run()` forwards the job's own `ownerId` to
-structure-client's `fetchReadyCards` so an export only ever pulls that
-same user's Ready cards — without this, exporting could mix another
-user's backlog into your CSV.
+Same model as the other two domain services: api-gateway verifies the JWT,
+checks the project belongs to the caller, and forwards its id as
+`X-Project-Id`; `ProjectGuard` (`src/auth/`) requires that header on every
+controller here. Every job is scoped to its `projectId`, and `run()`
+forwards the job's own `projectId` to structure-client's
+`fetchReadyCards` so an export only ever pulls that same project's Ready
+cards — without this, exporting could mix another project's backlog into
+your CSV.
 
-This service trusts whatever `X-User-Id` it's given rather than
-re-verifying a JWT — fine behind api-gateway inside a docker-compose
-network, not if this port is reachable from outside it.
+This service trusts whatever `X-Project-Id` it's given rather than
+re-verifying anything itself — fine behind api-gateway inside a
+docker-compose network, not if this port is reachable from outside it.
 
 ## Local development
 

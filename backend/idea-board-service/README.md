@@ -7,16 +7,16 @@ RabbitMQ and requirement-refiner-service) is down.
 
 ## Data model
 
-- `Idea`: `id`, `ownerId`, `content`, `category?`, `createdAt`, `updatedAt`
-- `Attachment`: `id`, `ownerId`, `name`, `mimeType`, raw bytes (decoded from
+- `Idea`: `id`, `projectId`, `content`, `category?`, `createdAt`, `updatedAt`
+- `Attachment`: `id`, `projectId`, `name`, `mimeType`, raw bytes (decoded from
   the base64 payload the frontend already sends), `createdAt`
 
-Every row belongs to exactly one `ownerId` (the api-gateway user who
-created it) and every query is scoped to it — see "Ownership" below.
+Every row belongs to exactly one `projectId` (an api-gateway project) and
+every query is scoped to it — see "Ownership" below.
 
 ## API
 
-Every route below requires an `X-User-Id` header — see "Ownership".
+Every route below requires an `X-Project-Id` header — see "Ownership".
 
 | Method | Path              | Notes                                             |
 |--------|-------------------|----------------------------------------------------|
@@ -33,20 +33,22 @@ Every route below requires an `X-User-Id` header — see "Ownership".
 ## Ownership
 
 This service never verifies a JWT itself — api-gateway does that
-(`JwtAuthGuard`) and forwards the authenticated user's id as `X-User-Id`
-on every proxied request (`ProxyService.forward`). `OwnerGuard`
-(`src/auth/`), applied to every controller here, requires that header and
-attaches it as `ownerId`; every service method filters or writes with it,
-including lookups by id (`findFirst`, not `findUnique`), so a request for
-someone else's idea/attachment id 404s instead of leaking it. There is one
-board per user, not per "project" — see the note in the repo root
-`ARCHITECTURE.md`.
+(`JwtAuthGuard`) and also checks the requested project actually belongs to
+the caller (`ProjectGuard` in api-gateway) before forwarding it as
+`X-Project-Id` on every proxied request (`ProxyService.forward`). The
+`ProjectGuard` here (`src/auth/`), applied to every controller in this
+service, just requires that header and attaches it as `projectId`; every
+service method filters or writes with it, including lookups by id
+(`findFirst`, not `findUnique`), so a request for an idea/attachment from
+a different project 404s instead of leaking it. A user can own several
+projects — see the note in the repo root `ARCHITECTURE.md`.
 
-This also means this service trusts whatever `X-User-Id` it's given — it
-doesn't re-verify a JWT itself, so anyone who can reach this service's
-port directly (not just through api-gateway) can claim to be any user.
-Fine for local/PTI scope inside a docker-compose network; don't expose
-this port publicly beyond that without adding real verification here too.
+This also means this service trusts whatever `X-Project-Id` it's given —
+it doesn't re-verify anything itself, so anyone who can reach this
+service's port directly (not just through api-gateway) can claim any
+project id. Fine for local/PTI scope inside a docker-compose network;
+don't expose this port publicly beyond that without adding real
+verification here too.
 
 ## Persistence
 

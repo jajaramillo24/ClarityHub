@@ -4,7 +4,6 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import type { AuthenticatedUser } from '../auth/jwt-payload.interface';
 
 @Injectable()
 export class ProxyService {
@@ -18,10 +17,11 @@ export class ProxyService {
    * which is why this reads the response as a raw buffer instead of
    * assuming JSON both ways.
    *
-   * Also forwards the caller's user id (attached to `req.user` by
-   * JwtAuthGuard, which runs before every non-@Public() route) as
-   * X-User-Id — the only thing that lets idea-board/structure/jira-exporter
-   * scope their data per user without each of them re-verifying the JWT.
+   * Also forwards the active project's id (attached to `req.projectId` by
+   * ProjectGuard, which checked it belongs to the JWT-verified caller) as
+   * X-Project-Id — the only thing that lets idea-board/structure/jira-exporter
+   * scope their data per project without each of them re-verifying
+   * ownership themselves.
    */
   async forward(
     targetBaseUrl: string,
@@ -31,11 +31,11 @@ export class ProxyService {
   ): Promise<void> {
     const url = `${targetBaseUrl}${req.originalUrl}`;
     const hasBody = !['GET', 'HEAD', 'DELETE'].includes(req.method);
-    const userId = (req as Request & { user?: AuthenticatedUser }).user?.id;
+    const projectId = (req as Request & { projectId?: string }).projectId;
 
     const headers: Record<string, string> = {};
     if (hasBody) headers['content-type'] = 'application/json';
-    if (userId) headers['x-user-id'] = userId;
+    if (projectId) headers['x-project-id'] = projectId;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);

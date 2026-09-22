@@ -12,38 +12,38 @@ import {
 import { IdeasService } from './ideas.service';
 import { CreateIdeaDto } from './dto/create-idea.dto';
 import { UpdateIdeaDto } from './dto/update-idea.dto';
-import { OwnerGuard } from '../auth/owner.guard';
-import { CurrentOwner } from '../auth/current-owner.decorator';
+import { ProjectGuard } from '../auth/project.guard';
+import { CurrentProject } from '../auth/current-project.decorator';
 
-@UseGuards(OwnerGuard)
+@UseGuards(ProjectGuard)
 @Controller('ideas')
 export class IdeasController {
   constructor(private readonly ideasService: IdeasService) {}
 
   @Get()
-  findAll(@CurrentOwner() ownerId: string) {
-    return this.ideasService.findAll(ownerId);
+  findAll(@CurrentProject() projectId: string) {
+    return this.ideasService.findAll(projectId);
   }
 
   @Post()
-  create(@Body() dto: CreateIdeaDto, @CurrentOwner() ownerId: string) {
-    return this.ideasService.create(dto, ownerId);
+  create(@Body() dto: CreateIdeaDto, @CurrentProject() projectId: string) {
+    return this.ideasService.create(dto, projectId);
   }
 
   @Patch(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateIdeaDto,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.ideasService.update(id, dto, ownerId);
+    return this.ideasService.update(id, dto, projectId);
   }
 
   @Delete(':id')
   remove(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentOwner() ownerId: string,
+    @CurrentProject() projectId: string,
   ) {
-    return this.ideasService.remove(id, ownerId);
+    return this.ideasService.remove(id, projectId);
   }
 }

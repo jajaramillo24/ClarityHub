@@ -16,15 +16,16 @@ moving part.
 
 ## Data model
 
-- `ProjectCard`: `id`, `ownerId`, `title`, `description`, `acceptanceCriteria[]`,
+- `ProjectCard`: `id`, `projectId`, `title`, `description`, `acceptanceCriteria[]`,
   `totalStoryPoints`, `justification`, `labels[]`, `risks[]`,
   `status` (`Draft`/`Ready`/`Exported`), `subtasks[]`
 - `Subtask`: `id`, `title`, `type` (`Backend`/`Frontend`/`Testing`/`DevOps`/`Docs`),
   `storyPoints`, `completed`, belongs to one `ProjectCard` (cascade delete) —
-  no `ownerId` of its own, scoped via its parent card's
-- `Nfr`: `id`, `ownerId`, `category`, `title`, `description`, `impactLevel` (`Low`/`Medium`/`High`)
+  no `projectId` of its own, scoped via its parent card's
+- `Nfr`: `id`, `projectId`, `category`, `title`, `description`, `impactLevel` (`Low`/`Medium`/`High`)
 
-`ProjectCard` and `Nfr` each belong to exactly one `ownerId` — see
+`ProjectCard` and `Nfr` each belong to exactly one `projectId` (an
+api-gateway project, not directly a user — a user can own several) — see
 "Ownership" below.
 
 `acceptanceCriteria`/`labels`/`risks` are stored as JSON arrays (MySQL has
@@ -33,7 +34,7 @@ in/out) is unchanged.
 
 ## API
 
-Every route below requires an `X-User-Id` header — see "Ownership".
+Every route below requires an `X-Project-Id` header — see "Ownership".
 
 | Method | Path                          | Notes                                          |
 |--------|-------------------------------|--------------------------------------------------|
@@ -53,17 +54,18 @@ Every route below requires an `X-User-Id` header — see "Ownership".
 
 ## Ownership
 
-Same model as idea-board-service: api-gateway verifies the JWT and
-forwards the user id as `X-User-Id`; `OwnerGuard` (`src/auth/`) requires
-that header on every controller here and every query is scoped to it
-(lookups by id use `findFirst`, so someone else's card/NFR id 404s).
-`jira-exporter-service` also calls this service directly
-(`GET /cards?status=Ready`) and forwards the same header it received from
-the gateway, so an export only ever sees its own user's Ready cards.
+Same model as idea-board-service: api-gateway verifies the JWT, checks the
+project belongs to the caller, and forwards its id as `X-Project-Id`;
+`ProjectGuard` (`src/auth/`) requires that header on every controller here
+and every query is scoped to it (lookups by id use `findFirst`, so a
+card/NFR from a different project 404s). `jira-exporter-service` also
+calls this service directly (`GET /cards?status=Ready`) and forwards the
+same header it received from the gateway, so an export only ever sees
+that project's Ready cards.
 
-This service trusts whatever `X-User-Id` it's given rather than
-re-verifying a JWT — fine behind api-gateway inside a docker-compose
-network, not if this port is reachable from outside it.
+This service trusts whatever `X-Project-Id` it's given rather than
+re-verifying anything itself — fine behind api-gateway inside a
+docker-compose network, not if this port is reachable from outside it.
 
 ## Local development
 

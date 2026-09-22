@@ -1,8 +1,10 @@
-import { All, Controller, Req, Res } from '@nestjs/common';
+import { All, Controller, Req, Res, UseGuards } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { ProxyService } from './proxy.service';
+import { ProjectGuard } from '../projects/project.guard';
 
+@UseGuards(ProjectGuard)
 @Controller('nfrs')
 export class NfrsProxyController {
   private readonly targetBaseUrl: string;
