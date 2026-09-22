@@ -37,6 +37,7 @@ services:
     environment:
       PORT: 3001
       DATABASE_URL: mysql://root:root@idea-board-db:3306/idea_board?allowPublicKeyRetrieval=true
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     ports:
       - "3001:3001"
     depends_on:
@@ -54,6 +55,7 @@ services:
       PORT: 3002
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     ports:
       - "3002:3002"
     depends_on:
@@ -79,6 +81,7 @@ services:
     environment:
       PORT: 3003
       DATABASE_URL: mysql://root:root@structure-db:3306/structure?allowPublicKeyRetrieval=true
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     ports:
       - "3003:3003"
     depends_on:
@@ -105,6 +108,7 @@ services:
       PORT: 3004
       DATABASE_URL: mysql://root:root@jira-exporter-db:3306/jira_exporter?allowPublicKeyRetrieval=true
       STRUCTURE_SERVICE_URL: http://structure-service:3003
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     ports:
       - "3004:3004"
     depends_on:
@@ -145,6 +149,7 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       DATABASE_URL: mysql://root:root@auth-db:3306/auth?allowPublicKeyRetrieval=true
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     ports:
       - "3000:3000"
     depends_on:

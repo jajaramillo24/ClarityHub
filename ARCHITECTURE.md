@@ -150,6 +150,37 @@ puertos puede mandar cualquier `X-User-Id` que quiera. Aceptable dentro de
 una red docker-compose local para el alcance del PTI; en un despliegue
 real esos puertos no deberían quedar expuestos fuera de la red interna.
 
+## Seguridad de API
+
+Cuatro puntos que suelen quedar afuera de un PTI y que se evaluaron
+explícitamente:
+
+- **CORS**: los 5 servicios restringen `enableCors` a los orígenes de
+  `CORS_ORIGIN` (`src/cors.ts` en cada uno, coma-separado, default al
+  dev server de Vite) en vez de aceptar cualquier origen. En la práctica
+  el único que un navegador ejercita directo es `api-gateway` — los otros
+  4 nunca tienen dominio público en Railway (ver `DEPLOY.md`) — pero
+  queda igual de restringido por si alguna vez lo tienen.
+- **Rate limiting**: `api-gateway` usa `@nestjs/throttler` (`ThrottlerGuard`
+  como `APP_GUARD`, antes que `JwtAuthGuard` para no gastar verificación de
+  JWT en un flood) con un default de 60 req/min/IP, y `/ai/*`
+  (`AiController`) baja eso a 20 req/min/IP porque cada llamada ahí gasta
+  cuota real de Anthropic — es la ruta donde un abuso cuesta plata, no sólo
+  carga.
+- **Tamaño de adjuntos**: `CreateAttachmentDto` (idea-board-service) limita
+  el `base64` a 8MB decodificados (`MaxLength` calculado sobre la
+  expansión ~4/3 de base64); `api-gateway` e `idea-board-service` también
+  suben el límite del body parser JSON a 11MB (el default de Express es
+  100kb) para que el límite real sea el de la validación explícita, no un
+  413 genérico del parser.
+- **Secrets en texto plano**: `ANTHROPIC_API_KEY` y `JWT_SECRET` viven como
+  variables de entorno de Railway sin rotación ni vault. Aceptado
+  deliberadamente para el alcance del PTI — no hay presupuesto ni
+  necesidad de un secret manager para una entrega académica — pero es lo
+  primero a resolver (Railway tiene integración con algún vault, o
+  mínimamente rotación manual periódica) antes de un uso productivo real
+  con datos de usuarios reales.
+
 ## Decisiones de diseño no explícitas en el brief
 
 - **NFRs viven en `structure-service`**, no en un servicio propio: son un
