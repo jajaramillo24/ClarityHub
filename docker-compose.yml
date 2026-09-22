@@ -114,11 +114,26 @@ services:
         condition: service_started
 
   # --- api-gateway ---
-  # Single entry point for the frontend. Holds no data of its own: pure
-  # proxy for idea-board/structure/jira-exporter, pure RabbitMQ RPC
-  # translation for requirement-refiner. No dependency on the AI-backed
+  # Single entry point for the frontend. Holds no business logic of its
+  # own: pure proxy for idea-board/structure/jira-exporter, pure RabbitMQ
+  # RPC translation for requirement-refiner. No dependency on the AI-backed
   # service being up — the gateway itself keeps serving every other route
-  # even when requirement-refiner-service (or RabbitMQ) is stopped.
+  # even when requirement-refiner-service (or RabbitMQ) is stopped. It does
+  # own one thing: the `users` table backing login (JwtAuthGuard requires a
+  # valid bearer token on every route except /auth/* and /health*).
+  auth-db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: auth
+    volumes:
+      - auth_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api-gateway:
     build: ./backend/api-gateway
     environment:
@@ -128,15 +143,24 @@ services:
       STRUCTURE_SERVICE_URL: http://structure-service:3003
       JIRA_EXPORTER_SERVICE_URL: http://jira-exporter-service:3004
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      DATABASE_URL: mysql://root:root@auth-db:3306/auth?allowPublicKeyRetrieval=true
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
     ports:
       - "3000:3000"
     depends_on:
-      - idea-board-service
-      - structure-service
-      - jira-exporter-service
-      - requirement-refiner-service
+      auth-db:
+        condition: service_healthy
+      idea-board-service:
+        condition: service_started
+      structure-service:
+        condition: service_started
+      jira-exporter-service:
+        condition: service_started
+      requirement-refiner-service:
+        condition: service_started
 
 volumes:
   idea_board_data:
   structure_data:
   jira_exporter_data:
+  auth_data:

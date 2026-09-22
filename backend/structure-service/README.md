@@ -16,18 +16,24 @@ moving part.
 
 ## Data model
 
-- `ProjectCard`: `id`, `title`, `description`, `acceptanceCriteria[]`,
+- `ProjectCard`: `id`, `ownerId`, `title`, `description`, `acceptanceCriteria[]`,
   `totalStoryPoints`, `justification`, `labels[]`, `risks[]`,
   `status` (`Draft`/`Ready`/`Exported`), `subtasks[]`
 - `Subtask`: `id`, `title`, `type` (`Backend`/`Frontend`/`Testing`/`DevOps`/`Docs`),
-  `storyPoints`, `completed`, belongs to one `ProjectCard` (cascade delete)
-- `Nfr`: `id`, `category`, `title`, `description`, `impactLevel` (`Low`/`Medium`/`High`)
+  `storyPoints`, `completed`, belongs to one `ProjectCard` (cascade delete) —
+  no `ownerId` of its own, scoped via its parent card's
+- `Nfr`: `id`, `ownerId`, `category`, `title`, `description`, `impactLevel` (`Low`/`Medium`/`High`)
+
+`ProjectCard` and `Nfr` each belong to exactly one `ownerId` — see
+"Ownership" below.
 
 `acceptanceCriteria`/`labels`/`risks` are stored as JSON arrays (MySQL has
 no native array type like Postgres does) — the API contract (`string[]`
 in/out) is unchanged.
 
 ## API
+
+Every route below requires an `X-User-Id` header — see "Ownership".
 
 | Method | Path                          | Notes                                          |
 |--------|-------------------------------|--------------------------------------------------|
@@ -44,6 +50,20 @@ in/out) is unchanged.
 | POST   | `/nfrs`                       | `{ category, title, description?, impactLevel }`  |
 | POST   | `/nfrs/bulk`                  | `{ nfrs: [...] }` — batch create (AI-generated NFR list) |
 | DELETE | `/nfrs/:id`                   |                                                     |
+
+## Ownership
+
+Same model as idea-board-service: api-gateway verifies the JWT and
+forwards the user id as `X-User-Id`; `OwnerGuard` (`src/auth/`) requires
+that header on every controller here and every query is scoped to it
+(lookups by id use `findFirst`, so someone else's card/NFR id 404s).
+`jira-exporter-service` also calls this service directly
+(`GET /cards?status=Ready`) and forwards the same header it received from
+the gateway, so an export only ever sees its own user's Ready cards.
+
+This service trusts whatever `X-User-Id` it's given rather than
+re-verifying a JWT — fine behind api-gateway inside a docker-compose
+network, not if this port is reachable from outside it.
 
 ## Local development
 

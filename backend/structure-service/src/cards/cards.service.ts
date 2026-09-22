@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
@@ -10,17 +9,17 @@ import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 export class CardsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll(status?: string) {
+  findAll(ownerId: string, status?: string) {
     return this.prisma.projectCard.findMany({
-      where: status ? { status } : {},
+      where: status ? { ownerId, status } : { ownerId },
       include: { subtasks: true },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async findOne(id: string) {
-    const card = await this.prisma.projectCard.findUnique({
-      where: { id },
+  async findOne(id: string, ownerId: string) {
+    const card = await this.prisma.projectCard.findFirst({
+      where: { id, ownerId },
       include: { subtasks: true },
     });
     if (!card) {
@@ -29,9 +28,10 @@ export class CardsService {
     return card;
   }
 
-  create(dto: CreateCardDto) {
+  create(dto: CreateCardDto, ownerId: string) {
     return this.prisma.projectCard.create({
       data: {
+        ownerId,
         title: dto.title,
         description: dto.description ?? '',
         acceptanceCriteria: [],
@@ -44,11 +44,12 @@ export class CardsService {
     });
   }
 
-  createMany(dtos: CreateCardDto[]) {
+  createMany(dtos: CreateCardDto[], ownerId: string) {
     return this.prisma.$transaction(
       dtos.map((dto) =>
         this.prisma.projectCard.create({
           data: {
+            ownerId,
             title: dto.title,
             description: dto.description ?? '',
             acceptanceCriteria: [],
@@ -63,52 +64,59 @@ export class CardsService {
     );
   }
 
-  async update(id: string, dto: UpdateCardDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateCardDto, ownerId: string) {
+    await this.findOne(id, ownerId);
     return this.prisma.projectCard.update({
       where: { id },
-      data: dto as Prisma.ProjectCardUpdateInput,
+      data: dto,
       include: { subtasks: true },
     });
   }
 
-  async remove(id: string): Promise<void> {
-    try {
-      await this.prisma.projectCard.delete({ where: { id } });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`Card ${id} not found`);
-      }
-      throw error;
+  async remove(id: string, ownerId: string): Promise<void> {
+    const result = await this.prisma.projectCard.deleteMany({
+      where: { id, ownerId },
+    });
+    if (result.count === 0) {
+      throw new NotFoundException(`Card ${id} not found`);
     }
   }
 
-  async addSubtask(cardId: string, dto: CreateSubtaskDto) {
-    await this.findOne(cardId);
+  async addSubtask(cardId: string, dto: CreateSubtaskDto, ownerId: string) {
+    await this.findOne(cardId, ownerId);
     await this.prisma.subtask.create({
       data: { ...dto, cardId, completed: false },
     });
-    return this.findOne(cardId);
+    return this.findOne(cardId, ownerId);
   }
 
-  async updateSubtask(cardId: string, subtaskId: string, dto: UpdateSubtaskDto) {
+  async updateSubtask(
+    cardId: string,
+    subtaskId: string,
+    dto: UpdateSubtaskDto,
+    ownerId: string,
+  ) {
     const subtask = await this.prisma.subtask.findFirst({
-      where: { id: subtaskId, cardId },
+      where: { id: subtaskId, cardId, card: { ownerId } },
     });
     if (!subtask) {
-      throw new NotFoundException(`Subtask ${subtaskId} not found on card ${cardId}`);
+      throw new NotFoundException(
+        `Subtask ${subtaskId} not found on card ${cardId}`,
+      );
     }
     await this.prisma.subtask.update({ where: { id: subtaskId }, data: dto });
-    return this.findOne(cardId);
+    return this.findOne(cardId, ownerId);
   }
 
-  async removeSubtask(cardId: string, subtaskId: string) {
+  async removeSubtask(cardId: string, subtaskId: string, ownerId: string) {
     const result = await this.prisma.subtask.deleteMany({
-      where: { id: subtaskId, cardId },
+      where: { id: subtaskId, cardId, card: { ownerId } },
     });
     if (result.count === 0) {
-      throw new NotFoundException(`Subtask ${subtaskId} not found on card ${cardId}`);
+      throw new NotFoundException(
+        `Subtask ${subtaskId} not found on card ${cardId}`,
+      );
     }
-    return this.findOne(cardId);
+    return this.findOne(cardId, ownerId);
   }
 }

@@ -8,20 +8,28 @@ datasource db {
 
 model Idea {
   id        String   @id @default(uuid())
+  // The id of the api-gateway user who owns this idea (see api-gateway's
+  // `users` table) — not a local foreign key, since that table lives in a
+  // different service's database. Forwarded on every request as the
+  // X-User-Id header (ProxyService in api-gateway, OwnerGuard here).
+  ownerId   String   @map("owner_id") @db.VarChar(36)
   content   String   @db.Text
   category  String?  @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([ownerId])
   @@map("ideas")
 }
 
 model Attachment {
   id        String   @id @default(uuid())
+  ownerId   String   @map("owner_id") @db.VarChar(36)
   name      String   @db.VarChar(255)
   mimeType  String   @map("mime_type") @db.VarChar(150)
   data      Bytes    @db.LongBlob
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([ownerId])
   @@map("attachments")
 }

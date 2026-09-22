@@ -8,6 +8,7 @@ import {
 } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const TOKEN_KEY = 'clarityhub_token';
 
 class ApiError extends Error {
   constructor(
@@ -18,11 +19,55 @@ class ApiError extends Error {
   }
 }
 
+// The gateway requires a bearer token on every route except /auth/* and
+// /health* (JwtAuthGuard, registered globally). Any call anywhere in the
+// tree that hits a 401 — not just the login form — means the session
+// expired, so it's flagged via a window event instead of a return value:
+// that's the only way to reach App's top-level auth state from the dozens
+// of independent fetch call sites scattered across the view components.
+function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* private browsing / storage disabled — session just won't persist across reloads */
+  }
+}
+
+function clearToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function notifyUnauthorized(): void {
+  clearToken();
+  window.dispatchEvent(new Event('clarityhub:unauthorized'));
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken();
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   });
+
+  if (response.status === 401) {
+    notifyUnauthorized();
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -45,11 +90,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 // before the real outcome is known, success/failure travels in an
 // {ok, data|message} envelope in the body instead of the HTTP status.
 async function requestAI<T>(path: string, body: unknown): Promise<T> {
+  const token = getToken();
   const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
   });
+
+  if (response.status === 401) {
+    notifyUnauthorized();
+  }
 
   const text = (await response.text()).trim();
   let envelope: { ok: boolean; data?: T; message?: string };
@@ -67,6 +120,46 @@ async function requestAI<T>(path: string, body: unknown): Promise<T> {
   }
   return envelope.data as T;
 }
+
+// ---------------------------------------------------------------------------
+// Auth (api-gateway's own /auth/* — everything else requires the token
+// these return)
+// ---------------------------------------------------------------------------
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string | null;
+}
+
+interface AuthResponse {
+  accessToken: string;
+  user: AuthUser;
+}
+
+export const register = (email: string, password: string, name?: string): Promise<AuthUser> =>
+  request<AuthResponse>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, name }),
+  }).then((res) => {
+    setToken(res.accessToken);
+    return res.user;
+  });
+
+export const login = (email: string, password: string): Promise<AuthUser> =>
+  request<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+  }).then((res) => {
+    setToken(res.accessToken);
+    return res.user;
+  });
+
+export const getCurrentUser = (): Promise<AuthUser> => request('/auth/me');
+
+export const hasStoredSession = (): boolean => getToken() !== null;
+
+export const logout = (): void => clearToken();
 
 // ---------------------------------------------------------------------------
 // Ideas & Attachments (idea-board-service)

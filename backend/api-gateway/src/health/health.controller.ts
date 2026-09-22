@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Public } from '../auth/decorators/public.decorator';
 
 interface ServiceHealth {
   name: string;
@@ -8,6 +9,7 @@ interface ServiceHealth {
   error?: string;
 }
 
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly config: ConfigService) {}
@@ -29,15 +31,24 @@ export class HealthController {
     const targets: Array<{ name: string; url: string }> = [
       {
         name: 'idea-board-service',
-        url: this.config.get<string>('IDEA_BOARD_SERVICE_URL', 'http://localhost:3001'),
+        url: this.config.get<string>(
+          'IDEA_BOARD_SERVICE_URL',
+          'http://localhost:3001',
+        ),
       },
       {
         name: 'structure-service',
-        url: this.config.get<string>('STRUCTURE_SERVICE_URL', 'http://localhost:3003'),
+        url: this.config.get<string>(
+          'STRUCTURE_SERVICE_URL',
+          'http://localhost:3003',
+        ),
       },
       {
         name: 'jira-exporter-service',
-        url: this.config.get<string>('JIRA_EXPORTER_SERVICE_URL', 'http://localhost:3004'),
+        url: this.config.get<string>(
+          'JIRA_EXPORTER_SERVICE_URL',
+          'http://localhost:3004',
+        ),
       },
       {
         name: 'requirement-refiner-service',

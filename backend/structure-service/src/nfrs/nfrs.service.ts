@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNfrDto } from './dto/create-nfr.dto';
 
@@ -7,13 +6,17 @@ import { CreateNfrDto } from './dto/create-nfr.dto';
 export class NfrsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.nfr.findMany({ orderBy: { createdAt: 'asc' } });
+  findAll(ownerId: string) {
+    return this.prisma.nfr.findMany({
+      where: { ownerId },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
-  create(dto: CreateNfrDto) {
+  create(dto: CreateNfrDto, ownerId: string) {
     return this.prisma.nfr.create({
       data: {
+        ownerId,
         category: dto.category,
         title: dto.title,
         description: dto.description ?? '',
@@ -22,11 +25,12 @@ export class NfrsService {
     });
   }
 
-  createMany(dtos: CreateNfrDto[]) {
+  createMany(dtos: CreateNfrDto[], ownerId: string) {
     return this.prisma.$transaction(
       dtos.map((dto) =>
         this.prisma.nfr.create({
           data: {
+            ownerId,
             category: dto.category,
             title: dto.title,
             description: dto.description ?? '',
@@ -37,14 +41,10 @@ export class NfrsService {
     );
   }
 
-  async remove(id: string): Promise<void> {
-    try {
-      await this.prisma.nfr.delete({ where: { id } });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException(`NFR ${id} not found`);
-      }
-      throw error;
+  async remove(id: string, ownerId: string): Promise<void> {
+    const result = await this.prisma.nfr.deleteMany({ where: { id, ownerId } });
+    if (result.count === 0) {
+      throw new NotFoundException(`NFR ${id} not found`);
     }
   }
 }

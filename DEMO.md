@@ -18,7 +18,25 @@ docker compose up --build
 
 Esperar a que todos los servicios reporten "healthy"/arrancados. Abrir el
 frontend (`npm run dev` en otra terminal, o servirlo aparte) apuntando a
-`VITE_API_URL=http://localhost:3000`.
+`VITE_API_URL=http://localhost:3000`. El resto de la app está detrás de
+login (`api-gateway` exige un JWT en toda ruta salvo `/auth/*` y
+`/health*`) — crear una cuenta desde la pantalla inicial o, para probar
+por `curl`:
+
+```bash
+REG=$(curl -s -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"demo-password"}')
+echo "$REG" | python3 -m json.tool
+TOKEN=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+USER_ID=$(echo "$REG" | python3 -c "import sys,json; print(json.load(sys.stdin)['user']['id'])")
+```
+
+Los datos de cada usuario están aislados (`ownerId` en cada fila, en las
+tres bases) — los curls de `/exports` en la Demo 2 le pegan directo a
+jira-exporter-service (puerto 3004), no al gateway, así que no llevan
+`Authorization`, pero como cualquier ruta de dominio sí necesitan el
+header `X-User-Id: $USER_ID` para saber de qué usuario es cada fila.
 
 Verificar que todo está arriba:
 
@@ -86,7 +104,7 @@ Exporter falla, el backlog ya estructurado no debe perderse".
 
 3. Verificar que el intento fallido quedó registrado, no perdido:
    ```bash
-   curl -s http://localhost:3004/exports | python3 -m json.tool
+   curl -s http://localhost:3004/exports -H "X-User-Id: $USER_ID" | python3 -m json.tool
    ```
    El job más reciente debería tener `"status": "failed"` con un
    `errorMessage` describiendo el problema — y **sin** haber perdido el
@@ -100,7 +118,7 @@ Exporter falla, el backlog ya estructurado no debe perderse".
 
 5. Reintentar el mismo job (reemplazar `<id>` por el id del paso 3):
    ```bash
-   curl -s -X POST http://localhost:3004/exports/<id>/retry | python3 -m json.tool
+   curl -s -X POST http://localhost:3004/exports/<id>/retry -H "X-User-Id: $USER_ID" | python3 -m json.tool
    ```
    Debería volver `"status": "completed"` con el CSV generado — mismo job,
    sin haber tenido que reconstruir nada.

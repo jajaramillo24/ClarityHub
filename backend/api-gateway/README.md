@@ -1,14 +1,25 @@
 # api-gateway
 
-Single entry point the frontend talks to. Two jobs only — it holds no
-business logic and no database of its own:
+Single entry point the frontend talks to. It holds no business logic of
+its own beyond one thing — login — plus three jobs:
 
+0. **Authentication** (`src/auth/`) — its own `users` table (Prisma/MySQL,
+   the only database this service owns) backs `POST /auth/register` and
+   `POST /auth/login`, which return a JWT. `JwtAuthGuard` is registered
+   globally (`APP_GUARD` in `app.module.ts`), so every route below requires
+   `Authorization: Bearer <token>` by default; routes opt out individually
+   with `@Public()` (currently just `/auth/register`, `/auth/login` and
+   `/health*`). Once identified, the caller's user id is forwarded to every
+   downstream service as `X-User-Id` (see point 1) — that's what lets each
+   of them scope its own data per user, since none of them verify the JWT
+   themselves. See "Autenticación / autorización" in `ARCHITECTURE.md`.
 1. **Transparent reverse proxy** (`src/proxy/`) for the three REST-backed
    services — `/ideas*` and `/attachments*` → idea-board-service, `/cards*`
    and `/nfrs*` → structure-service, `/exports*` → jira-exporter-service. Same path,
-   same method, same body; the response (status, content-type, body) is
-   piped straight back, which is what lets jira-exporter-service's CSV
-   download pass through unchanged.
+   same method, same body, plus an `X-User-Id` header carrying the
+   authenticated user's id (from step 0); the response (status,
+   content-type, body) is piped straight back, which is what lets
+   jira-exporter-service's CSV download pass through unchanged.
 2. **Protocol translation** (`src/ai/`) for requirement-refiner-service:
    `/ai/*` HTTP requests become RabbitMQ RPC calls
    (`requirement_refiner_queue`), bounded by a 45s timeout
@@ -22,6 +33,9 @@ business logic and no database of its own:
 
 | Path                | Forwards to                        |
 |----------------------|-------------------------------------|
+| `POST /auth/register` | Creates a user, returns `{ accessToken, user }` — public |
+| `POST /auth/login`    | Verifies credentials, returns `{ accessToken, user }` — public |
+| `GET /auth/me`        | Current user from the bearer token |
 | `/ideas*`            | idea-board-service                  |
 | `/attachments*`      | idea-board-service                  |
 | `/cards*`             | structure-service                   |

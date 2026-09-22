@@ -54,6 +54,7 @@ const Icons = {
   ToggleOn: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"/><circle cx="16" cy="12" r="3"/></svg>,
   ToggleOff: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="5" width="22" height="14" rx="7" ry="7"/><circle cx="8" cy="12" r="3"/></svg>,
   Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  LogOut: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
 };
 
 // --- Modern Components ---
@@ -103,7 +104,86 @@ const LoadingIndicator = ({ text }: { text: string }) => {
   );
 };
 
-const FreeJamView = ({ 
+// --- Auth ---
+// Gates the whole app: api-gateway rejects every route except /auth/* and
+// /health* without a bearer token, so there's nothing useful to show until
+// this resolves to a logged-in user.
+const AuthView = ({ onAuthenticated }: { onAuthenticated: (user: ApiClient.AuthUser) => void }) => {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const user = mode === 'login'
+        ? await ApiClient.login(email, password)
+        : await ApiClient.register(email, password);
+      onAuthenticated(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex h-screen items-center justify-center bg-[#030712] text-gray-100 p-4">
+      <div className="w-full max-w-sm bg-gray-900/40 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl p-8">
+        <div className="flex flex-col items-center gap-3 mb-6">
+          <img src={`${import.meta.env.BASE_URL}clarity_logo.png`} alt="ClarityHub Logo" className="w-40 drop-shadow-lg" />
+          <div className="flex items-center gap-2 text-gray-400">
+            <Icons.Lock />
+            <span className="text-sm">{mode === 'login' ? 'Sign in to continue' : 'Create an account'}</span>
+          </div>
+        </div>
+
+        <form onSubmit={submit} className="space-y-3">
+          <input
+            type="email"
+            required
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-clarity-500"
+          />
+          <input
+            type="password"
+            required
+            minLength={mode === 'register' ? 8 : undefined}
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-clarity-500"
+          />
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-clarity-600 hover:bg-clarity-500 disabled:opacity-50 text-white font-semibold rounded-xl py-2.5 text-sm transition-colors"
+          >
+            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
+
+        <button
+          onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+          className="w-full text-center text-xs text-gray-400 hover:text-white mt-4 transition-colors"
+        >
+          {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const FreeJamView = ({
   ideas, setIdeas, attachments, setAttachments, cards, setCards, nfrs, setNfrs, onNavigateToCards
 }: { 
   ideas: Idea[], setIdeas: (i: Idea[]) => void, 
@@ -1420,6 +1500,34 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
 export default function App() {
   const [activeStage, setActiveStage] = useState<Stage>(Stage.FREE_JAM);
 
+  // --- Auth gate ---
+  // `authChecked` distinguishes "still verifying a stored token" from "no
+  // user" so a valid session doesn't flash the login screen on reload.
+  const [authUser, setAuthUser] = useState<ApiClient.AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    if (!ApiClient.hasStoredSession()) {
+      setAuthChecked(true);
+      return;
+    }
+    ApiClient.getCurrentUser()
+      .then(setAuthUser)
+      .catch(() => setAuthUser(null))
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  useEffect(() => {
+    const onUnauthorized = () => setAuthUser(null);
+    window.addEventListener('clarityhub:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('clarityhub:unauthorized', onUnauthorized);
+  }, []);
+
+  const logout = () => {
+    ApiClient.logout();
+    setAuthUser(null);
+  };
+
   // --- Central Application State ---
   // Ideas, NFRs and cards are persisted server-side (idea-board-service /
   // structure-service via api-gateway) — this is just the in-memory cache
@@ -1433,6 +1541,7 @@ export default function App() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
+    if (!authUser) return;
     Promise.all([ApiClient.getIdeas(), ApiClient.getNfrs(), ApiClient.getCards()])
       .then(([loadedIdeas, loadedNfrs, loadedCards]) => {
         setIdeas(loadedIdeas);
@@ -1440,7 +1549,15 @@ export default function App() {
         setCards(loadedCards);
       })
       .catch((e) => console.error('Failed to load data from the backend', e));
-  }, []);
+  }, [authUser]);
+
+  if (!authChecked) {
+    return <div className="h-screen bg-[#030712]" />;
+  }
+
+  if (!authUser) {
+    return <AuthView onAuthenticated={setAuthUser} />;
+  }
 
   const renderContent = () => {
     switch (activeStage) {
@@ -1512,7 +1629,7 @@ export default function App() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/10 hidden lg:block relative z-10">
+        <div className="p-4 border-t border-white/10 hidden lg:block relative z-10 space-y-2">
            <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/20">
               <div className="flex items-center gap-2 mb-1">
                  <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,1)] animate-pulse"></div>
@@ -1520,6 +1637,14 @@ export default function App() {
               </div>
               <p className="text-[10px] text-white/60 font-mono mt-1">v2.5.0-ent</p>
            </div>
+           <button
+             onClick={logout}
+             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-colors text-xs"
+             title={authUser.email}
+           >
+             <Icons.LogOut />
+             <span className="truncate flex-1 text-left">{authUser.email}</span>
+           </button>
         </div>
       </aside>
 

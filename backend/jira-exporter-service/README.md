@@ -7,10 +7,11 @@ a downloadable file.
 
 ## Data model
 
-`ExportJob`: `id`, `status` (`pending`/`completed`/`failed`), `delimiter`,
-`includeSubtasks`, `columns` (JSON config), `cardCount`, `csvContent`
-(kept so a completed job re-downloads without hitting structure-service
-again), `errorMessage`. Persisted via Prisma ORM against MySQL.
+`ExportJob`: `id`, `ownerId`, `status` (`pending`/`completed`/`failed`),
+`delimiter`, `includeSubtasks`, `columns` (JSON config), `cardCount`,
+`csvContent` (kept so a completed job re-downloads without hitting
+structure-service again), `errorMessage`. Persisted via Prisma ORM against
+MySQL.
 
 Persisting jobs (rather than generating and forgetting) is what makes
 "retry a failed export without losing the backlog" concrete: the backlog
@@ -19,6 +20,8 @@ attempt succeeded, and a failed job here just gets retried — no
 regeneration of anything upstream.
 
 ## API
+
+Every route below requires an `X-User-Id` header — see "Ownership".
 
 | Method | Path                  | Notes                                                |
 |--------|-----------------------|--------------------------------------------------------|
@@ -33,6 +36,20 @@ CSV column semantics (`src/csv/csv-generator.ts`) are a direct port of the
 frontend's `ExportManagerView.downloadCsv` — same headers, same
 parent-story-then-subtask row layout, same priority-from-story-points rule
 — so a Jira import mapping a user already has set up keeps working.
+
+## Ownership
+
+Same model as the other two domain services: api-gateway verifies the JWT
+and forwards the user id as `X-User-Id`; `OwnerGuard` (`src/auth/`)
+requires that header on every controller here. Every job is scoped to its
+`ownerId`, and `run()` forwards the job's own `ownerId` to
+structure-client's `fetchReadyCards` so an export only ever pulls that
+same user's Ready cards — without this, exporting could mix another
+user's backlog into your CSV.
+
+This service trusts whatever `X-User-Id` it's given rather than
+re-verifying a JWT — fine behind api-gateway inside a docker-compose
+network, not if this port is reachable from outside it.
 
 ## Local development
 
