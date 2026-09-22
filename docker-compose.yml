@@ -26,6 +26,8 @@ services:
       MYSQL_DATABASE: idea_board
     volumes:
       - idea_board_data:/var/lib/mysql
+    ports:
+      - "3307:3306" # exposed for local GUI clients (DBeaver, TablePlus, etc.) — not needed by any service, they talk over the docker network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 5s
@@ -70,6 +72,8 @@ services:
       MYSQL_DATABASE: structure
     volumes:
       - structure_data:/var/lib/mysql
+    ports:
+      - "3308:3306" # exposed for local GUI clients — see idea-board-db's note
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 5s
@@ -96,6 +100,8 @@ services:
       MYSQL_DATABASE: jira_exporter
     volumes:
       - jira_exporter_data:/var/lib/mysql
+    ports:
+      - "3309:3306" # exposed for local GUI clients — see idea-board-db's note
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 5s
@@ -132,6 +138,8 @@ services:
       MYSQL_DATABASE: auth
     volumes:
       - auth_data:/var/lib/mysql
+    ports:
+      - "3306:3306" # exposed for local GUI clients — see idea-board-db's note
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 5s
