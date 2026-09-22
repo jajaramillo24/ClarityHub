@@ -1,4 +1,5 @@
 import { Body, Controller, Post, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import {
   AnalyzeRisksDto,
@@ -16,28 +17,41 @@ const HEARTBEAT_INTERVAL_MS = 15000;
 // asks for: RefinerClientService bounds every call with a timeout, so a
 // stuck or dead refiner (or a dead RabbitMQ) turns into a clean 503/504
 // here instead of hanging the gateway or, worse, the rest of the app.
+//
+// Throttled much tighter than the app-wide default: every route here spends
+// real Anthropic quota, so this is the one place a flood costs money, not
+// just load.
+@Throttle({ default: { limit: 20, ttl: 60000 } })
 @Controller('ai')
 export class AiController {
   constructor(private readonly refiner: RefinerClientService) {}
 
   @Post('summarize')
   summarize(@Body() dto: SummarizeIdeasDto, @Res() res: Response) {
-    return this.respond(res, () => this.refiner.send('requirement_refiner.summarize_ideas', dto));
+    return this.respond(res, () =>
+      this.refiner.send('requirement_refiner.summarize_ideas', dto),
+    );
   }
 
   @Post('risks')
   analyzeRisks(@Body() dto: AnalyzeRisksDto, @Res() res: Response) {
-    return this.respond(res, () => this.refiner.send('requirement_refiner.analyze_risks', dto));
+    return this.respond(res, () =>
+      this.refiner.send('requirement_refiner.analyze_risks', dto),
+    );
   }
 
   @Post('nfrs')
   generateNfrs(@Body() dto: GenerateNfrsDto, @Res() res: Response) {
-    return this.respond(res, () => this.refiner.send('requirement_refiner.generate_nfrs', dto));
+    return this.respond(res, () =>
+      this.refiner.send('requirement_refiner.generate_nfrs', dto),
+    );
   }
 
   @Post('cards')
   generateCards(@Body() dto: GenerateCardsDto, @Res() res: Response) {
-    return this.respond(res, () => this.refiner.send('requirement_refiner.generate_cards', dto));
+    return this.respond(res, () =>
+      this.refiner.send('requirement_refiner.generate_cards', dto),
+    );
   }
 
   @Post('smart-card')
@@ -59,7 +73,10 @@ export class AiController {
   // line is locked in at 200 — we can no longer switch to a 503/504 if the
   // call fails afterwards. So the real outcome travels in a JSON envelope
   // in the body instead of the status code; callers must check `ok`.
-  private async respond(res: Response, fn: () => Promise<unknown>): Promise<void> {
+  private async respond(
+    res: Response,
+    fn: () => Promise<unknown>,
+  ): Promise<void> {
     res.setHeader('Content-Type', 'application/json');
     const heartbeat = setInterval(() => res.write(' '), HEARTBEAT_INTERVAL_MS);
     try {

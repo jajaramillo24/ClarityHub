@@ -1,15 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
+import { corsOrigins } from './cors';
 
 async function bootstrap() {
   // Hybrid app: a small HTTP surface for health checks (docker healthcheck,
   // manual debugging) plus the RabbitMQ microservice transport that actually
   // serves requirement-refiner requests from api-gateway.
   const app = await NestFactory.create(AppModule);
-  app.enableCors();
+  app.enableCors({ origin: corsOrigins() });
 
-  const rabbitmqUrl = process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672';
+  const rabbitmqUrl =
+    process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672';
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {

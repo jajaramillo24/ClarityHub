@@ -18,13 +18,15 @@ puedan verse entre sí por la red privada de Railway.
 
 ## 2. Bases de datos (una instancia por servicio, a propósito)
 
-Agregar **3 veces** `+ New → Database → Add MySQL` (una por cada
-servicio que necesita persistencia). Nombralas para no confundirlas, por
-ejemplo:
+Agregar **4 veces** `+ New → Database → Add MySQL` (una por cada
+servicio que necesita persistencia — los 3 de dominio más `api-gateway`,
+que tiene su propia tabla `users` para el login). Nombralas para no
+confundirlas, por ejemplo:
 
 - `idea-board-db`
 - `structure-db`
 - `jira-exporter-db`
+- `auth-db`
 
 Cada una expone automáticamente variables `MYSQLHOST`/`MYSQLPORT`/
 `MYSQLUSER`/`MYSQLPASSWORD`/`MYSQLDATABASE` (y una `MYSQL_URL` ya armada)
@@ -54,16 +56,26 @@ Por cada uno (`idea-board-service`, `requirement-refiner-service`,
    referencia de Railway (`${{NombreDelServicio.VARIABLE}}`) para apuntar
    a los otros servicios/bases por red privada en vez de hardcodear URLs:
 
+   `CORS_ORIGIN` abajo es la URL pública de tu frontend en GitHub Pages
+   (p. ej. `https://tu-usuario.github.io`) — sin ella, cada servicio cae al
+   default de desarrollo (`http://localhost:5173`), que un navegador real
+   nunca manda como `Origin`, así que las llamadas del frontend desplegado
+   fallarían por CORS. Los 4 servicios de dominio no tienen dominio público
+   (ver paso 4.3), así que su `CORS_ORIGIN` es más bien defensa en
+   profundidad que algo que un navegador vaya a ejercitar.
+
    **idea-board-service**
    ```
    PORT=3001
    DATABASE_URL=mysql://${{idea-board-db.MYSQLUSER}}:${{idea-board-db.MYSQLPASSWORD}}@${{idea-board-db.MYSQLHOST}}:${{idea-board-db.MYSQLPORT}}/${{idea-board-db.MYSQLDATABASE}}
+   CORS_ORIGIN=https://tu-usuario.github.io
    ```
 
    **structure-service**
    ```
    PORT=3003
    DATABASE_URL=mysql://${{structure-db.MYSQLUSER}}:${{structure-db.MYSQLPASSWORD}}@${{structure-db.MYSQLHOST}}:${{structure-db.MYSQLPORT}}/${{structure-db.MYSQLDATABASE}}
+   CORS_ORIGIN=https://tu-usuario.github.io
    ```
 
    **jira-exporter-service**
@@ -71,6 +83,7 @@ Por cada uno (`idea-board-service`, `requirement-refiner-service`,
    PORT=3004
    DATABASE_URL=mysql://${{jira-exporter-db.MYSQLUSER}}:${{jira-exporter-db.MYSQLPASSWORD}}@${{jira-exporter-db.MYSQLHOST}}:${{jira-exporter-db.MYSQLPORT}}/${{jira-exporter-db.MYSQLDATABASE}}
    STRUCTURE_SERVICE_URL=http://${{structure-service.RAILWAY_PRIVATE_DOMAIN}}
+   CORS_ORIGIN=https://tu-usuario.github.io
    ```
 
    **requirement-refiner-service**
@@ -78,6 +91,7 @@ Por cada uno (`idea-board-service`, `requirement-refiner-service`,
    PORT=3002
    RABBITMQ_URL=<la URL de tu RabbitMQ/CloudAMQP>
    ANTHROPIC_API_KEY=<tu API key de Anthropic>
+   CORS_ORIGIN=https://tu-usuario.github.io
    ```
 
    **api-gateway**
@@ -88,7 +102,13 @@ Por cada uno (`idea-board-service`, `requirement-refiner-service`,
    JIRA_EXPORTER_SERVICE_URL=http://${{jira-exporter-service.RAILWAY_PRIVATE_DOMAIN}}
    REQUIREMENT_REFINER_SERVICE_URL=http://${{requirement-refiner-service.RAILWAY_PRIVATE_DOMAIN}}
    RABBITMQ_URL=<la misma URL de RabbitMQ/CloudAMQP>
+   DATABASE_URL=mysql://${{auth-db.MYSQLUSER}}:${{auth-db.MYSQLPASSWORD}}@${{auth-db.MYSQLHOST}}:${{auth-db.MYSQLPORT}}/${{auth-db.MYSQLDATABASE}}
+   JWT_SECRET=<un valor random largo — no el default de dev>
+   CORS_ORIGIN=https://tu-usuario.github.io
    ```
+   `CORS_ORIGIN` en `api-gateway` es el que realmente importa: es el único
+   servicio con dominio público, el único al que un navegador le pega
+   directo.
 
 5. Deploy. Railway construye la imagen con el `Dockerfile` del servicio y
    la levanta; el healthcheck en `/health` (definido en cada
@@ -113,10 +133,10 @@ de deploy (push a `main`, o `workflow_dispatch`).
 
 ## Notas
 
-- **Costo**: 3 MySQL + RabbitMQ + 5 servicios es más que el free tier
+- **Costo**: 4 MySQL + RabbitMQ + 5 servicios es más que el free tier
   de Railway suele cubrir sin tarjeta cargada — confirmá el plan antes de
   desplegar todo junto.
-- **`prisma db push`**: los 3 servicios con base de datos sincronizan el
+- **`prisma db push`**: los 4 servicios con base de datos sincronizan el
   esquema directo desde `schema.prisma` con Prisma ORM (ver
   `ARCHITECTURE.md`), sin historial de migraciones. Sirve para el alcance
   de este PTI; para un uso más allá de la entrega, migrar a
