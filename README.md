@@ -20,9 +20,12 @@ ClarityHub es una aplicación de gestión de proyectos potenciada por IA que te 
 
 ## Arquitectura
 
-Frontend (React + Vite) hablando exclusivamente con un **backend distribuido** de 4
-microservicios NestJS detrás de un API Gateway — ninguna llamada a IA ni escritura
-de datos ocurre en el navegador:
+Este repositorio contiene **sólo el frontend** (React + Vite). El backend
+distribuido vive en un repositorio aparte:
+[`clarityhub-backend`](https://github.com/<tu-usuario>/clarityhub-backend).
+
+El frontend habla exclusivamente con el `api-gateway` de ese backend —
+ninguna llamada a IA ni escritura de datos ocurre en el navegador:
 
 ```
 Frontend ──▶ api-gateway ──┬──▶ idea-board-service ──────▶ MySQL (idea_board)
@@ -44,8 +47,10 @@ Frontend ──▶ api-gateway ──┬──▶ idea-board-service ───�
 - **api-gateway**: único punto de entrada para el frontend — proxy transparente
   hacia los tres servicios REST, traduce las llamadas de IA a RPC sobre RabbitMQ.
 
-Cada servicio del backend documenta su propia API en su `README.md`
-(`backend/<servicio>/README.md`).
+Cada servicio del backend publica su propia API en Swagger (`/docs`) y
+documenta su diseño en su `README.md` — ver el repositorio del backend. El que
+importa desde acá es el del gateway: <http://localhost:3000/docs> con el stack
+local levantado.
 
 ## Tecnología
 
@@ -55,33 +60,36 @@ Cada servicio del backend documenta su propia API en su `README.md`
 
 ## Run Locally
 
-### Todo el stack con Docker Compose (recomendado)
+El frontend necesita el backend corriendo. Son dos repos, así que son dos
+clones:
+
+### 1. Backend
 
 **Prerequisites:** Docker, Docker Compose, una API key de Anthropic.
 
 ```bash
-cp .env.example .env    # VITE_API_URL=http://localhost:3000 ya viene por defecto
-ANTHROPIC_API_KEY=tu-api-key-aqui docker compose up --build
+git clone https://github.com/<tu-usuario>/clarityhub-backend
+cd clarityhub-backend
+cp .env.example .env    # completar ANTHROPIC_API_KEY
+docker compose up --build
 ```
 
-Esto levanta los 4 microservicios + api-gateway + RabbitMQ + una instancia de
-MySQL por servicio. El frontend (`npm run dev`, ver abajo) apunta a
-`http://localhost:3000` (api-gateway) por defecto.
+Esto levanta los 5 servicios + RabbitMQ + una instancia de MySQL por servicio.
+El `api-gateway` queda en `http://localhost:3000`.
 
-### Solo el frontend
+### 2. Frontend (este repo)
 
-**Prerequisites:** Node.js, el backend corriendo (Docker Compose o cada servicio
-manualmente — ver `backend/<servicio>/README.md`).
+**Prerequisites:** Node.js.
 
 ```bash
 npm install
-cp .env.example .env   # ajustá VITE_API_URL si el gateway no está en localhost:3000
+cp .env.example .env   # VITE_API_URL=http://localhost:3000 ya viene por defecto
 npm run dev
 ```
 
 ## Despliegue en GitHub Pages
 
-El proyecto se despliega automáticamente en GitHub Pages cuando haces push a la rama `main`. Solo el frontend se despliega ahí — el backend se despliega por separado (ver `backend/README` de cada servicio, y Railway para producción).
+Este repositorio se despliega automáticamente en GitHub Pages cuando haces push a la rama `main`. El backend se despliega por separado desde su propio repositorio — ver `DEPLOY.md` ahí (Railway).
 
 ### Configurar el Secret en GitHub:
 
@@ -118,4 +126,4 @@ ClarityHub incluye una funcionalidad completa de exportación a Jira que permite
 - **Múltiples delimitadores**: Soporta coma (`,`) y punto y coma (`;`)
 - **Reintentos**: si `structure-service` no está disponible al exportar, el intento queda
   registrado como fallido y se puede reintentar sin perder el backlog ya estructurado
-  (ver `backend/jira-exporter-service/README.md`)
+  (ver el `README.md` de `jira-exporter-service` en el repo del backend)
