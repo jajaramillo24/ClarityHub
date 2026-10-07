@@ -22,7 +22,7 @@ ClarityHub es una aplicación de gestión de proyectos potenciada por IA que te 
 
 Este repositorio contiene **sólo el frontend** (React + Vite). El backend
 distribuido vive en un repositorio aparte:
-[`clarityhub-backend`](https://github.com/<tu-usuario>/clarityhub-backend).
+[`clarityhub-backend`](https://github.com/matiassapa/clarityhub-backend).
 
 El frontend habla exclusivamente con el `api-gateway` de ese backend —
 ninguna llamada a IA ni escritura de datos ocurre en el navegador:
@@ -68,7 +68,7 @@ clones:
 **Prerequisites:** Docker, Docker Compose, una API key de Anthropic.
 
 ```bash
-git clone https://github.com/<tu-usuario>/clarityhub-backend
+git clone https://github.com/matiassapa/clarityhub-backend
 cd clarityhub-backend
 cp .env.example .env    # completar ANTHROPIC_API_KEY
 docker compose up --build
