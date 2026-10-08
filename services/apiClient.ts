@@ -84,6 +84,13 @@ function clearActiveProjectId(): void {
   }
 }
 
+// A 401 from the login form means a wrong password, not an expired
+// session: routing it through notifyUnauthorized() wiped the stored token
+// and reset App's auth state in the middle of the submit. Only routes that
+// were already authenticated can signal expiry.
+const isAuthAttempt = (path: string): boolean =>
+  path === '/auth/login' || path === '/auth/register';
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const projectId = getActiveProjectId();
@@ -97,7 +104,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && !isAuthAttempt(path)) {
     notifyUnauthorized();
   }
 
@@ -132,7 +139,7 @@ async function requestAI<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && !isAuthAttempt(path)) {
     notifyUnauthorized();
   }
 
