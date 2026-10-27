@@ -4,6 +4,7 @@ import { STAGES } from './constants';
 import * as ApiClient from './services/apiClient';
 import { parse } from 'marked';
 import { KanbanBoardView } from './KanbanBoardView';
+import { LandingView, Language } from './LandingView';
 
 // --- Markdown Renderer ---
 const MarkdownRenderer = ({ content }: { content: string }) => {
@@ -213,8 +214,18 @@ const describeAuthError = (err: unknown, mode: 'login' | 'register'): string => 
   return raw || 'Something went wrong. Please try again.';
 };
 
-const AuthView = ({ onAuthenticated }: { onAuthenticated: (user: ApiClient.AuthUser) => void }) => {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+const AuthView = ({
+  onAuthenticated,
+  initialMode = 'login',
+  selectedPlan,
+  onBackToLanding,
+}: {
+  onAuthenticated: (user: ApiClient.AuthUser) => void;
+  initialMode?: 'login' | 'register';
+  selectedPlan?: string;
+  onBackToLanding?: () => void;
+}) => {
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -239,10 +250,27 @@ const AuthView = ({ onAuthenticated }: { onAuthenticated: (user: ApiClient.AuthU
 
   return (
     <AuthShell>
+      {onBackToLanding && (
+        <div className="mb-4 flex justify-start">
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-gray-900/60 px-3.5 py-2 text-xs font-medium text-gray-300 hover:border-clarity-500/40 hover:text-white transition-colors backdrop-blur-md"
+          >
+            ← Back to ClarityHub & Pricing
+          </button>
+        </div>
+      )}
       <AuthCard
         icon={<Icons.Lock />}
         subtitle={mode === 'login' ? 'Sign in to continue' : 'Create your account'}
       >
+        {selectedPlan && mode === 'register' && (
+          <div className="mb-5 flex items-center justify-between rounded-xl border border-clarity-500/30 bg-clarity-900/30 px-4 py-2.5 text-xs text-clarity-200">
+            <span>Selected plan: <strong className="text-white">{selectedPlan}</strong></span>
+            <span className="rounded-md bg-clarity-600/40 px-2 py-0.5 text-[10px] font-semibold uppercase text-clarity-200">Active</span>
+          </div>
+        )}
         <div className="mb-7 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-black/30 p-1">
           {([['login', 'Sign in'], ['register', 'Create account']] as const).map(([value, text]) => (
             <button
@@ -316,11 +344,12 @@ const AuthView = ({ onAuthenticated }: { onAuthenticated: (user: ApiClient.AuthU
 // ProjectGuard), so this gates the app the same way AuthView does: nothing
 // useful to show until a project is picked or created.
 const ProjectPickerView = ({
-  projects, onSelect, onCreated,
+  projects, onSelect, onCreated, onViewLanding,
 }: {
   projects: ApiClient.Project[];
   onSelect: (projectId: string) => void;
   onCreated: (project: ApiClient.Project) => void;
+  onViewLanding?: () => void;
 }) => {
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -343,6 +372,17 @@ const ProjectPickerView = ({
 
   return (
     <AuthShell>
+      {onViewLanding && (
+        <div className="mb-4 flex justify-start">
+          <button
+            type="button"
+            onClick={onViewLanding}
+            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-gray-900/60 px-3.5 py-2 text-xs font-medium text-gray-300 hover:border-clarity-500/40 hover:text-white transition-colors backdrop-blur-md"
+          >
+            ← View ClarityHub Landing & Pricing
+          </button>
+        </div>
+      )}
       <AuthCard icon={<Icons.Kanban />} subtitle="Choose a project to continue">
         {projects.length > 0 && (
           <div className="mb-7">
@@ -1780,6 +1820,10 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
 
 export default function App() {
   const [activeStage, setActiveStage] = useState<Stage>(Stage.FREE_JAM);
+  const [landingLang, setLandingLang] = useState<Language>('es');
+  const [showLanding, setShowLanding] = useState<boolean>(true);
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login');
+  const [selectedPlan, setSelectedPlan] = useState<string | undefined>(undefined);
 
   // --- Auth gate ---
   // `authChecked` distinguishes "still verifying a stored token" from "no
@@ -1793,7 +1837,10 @@ export default function App() {
       return;
     }
     ApiClient.getCurrentUser()
-      .then(setAuthUser)
+      .then((user) => {
+        setAuthUser(user);
+        setShowLanding(false);
+      })
       .catch(() => setAuthUser(null))
       .finally(() => setAuthChecked(true));
   }, []);
@@ -1809,6 +1856,7 @@ export default function App() {
     setAuthUser(null);
     setProjects([]);
     setActiveProjectId(null);
+    setShowLanding(true);
   };
 
   // --- Project gate ---
@@ -1872,8 +1920,34 @@ export default function App() {
     return <div className="h-screen bg-[#030712]" />;
   }
 
+  if (showLanding) {
+    return (
+      <LandingView
+        lang={landingLang}
+        onChangeLang={setLandingLang}
+        isAuthenticated={Boolean(authUser)}
+        onContinueToApp={() => setShowLanding(false)}
+        onStartAuth={(mode, planName) => {
+          setAuthInitialMode(mode);
+          setSelectedPlan(planName);
+          setShowLanding(false);
+        }}
+      />
+    );
+  }
+
   if (!authUser) {
-    return <AuthView onAuthenticated={setAuthUser} />;
+    return (
+      <AuthView
+        initialMode={authInitialMode}
+        selectedPlan={selectedPlan}
+        onBackToLanding={() => setShowLanding(true)}
+        onAuthenticated={(user) => {
+          setAuthUser(user);
+          setShowLanding(false);
+        }}
+      />
+    );
   }
 
   if (!projectsChecked) {
@@ -1885,6 +1959,7 @@ export default function App() {
       <ProjectPickerView
         projects={projects}
         onSelect={selectProject}
+        onViewLanding={() => setShowLanding(true)}
         onCreated={(project) => {
           setProjects([...projects, project]);
           selectProject(project.id);
@@ -1979,6 +2054,14 @@ export default function App() {
                  <span className="text-[10px] text-white/90 uppercase tracking-widest font-bold">Project</span>
               </div>
               <p className="text-xs text-white/80 truncate">{activeProjectName}</p>
+           </button>
+           <button
+             onClick={() => setShowLanding(true)}
+             className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-clarity-300 hover:text-white hover:bg-clarity-600/20 border border-clarity-500/20 transition-colors text-xs font-medium"
+             title="View ClarityHub Landing & Pricing"
+           >
+             <Icons.Zap />
+             <span className="truncate flex-1 text-left">Landing & Pricing</span>
            </button>
            <button
              onClick={logout}
