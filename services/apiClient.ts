@@ -94,20 +94,34 @@ const isAuthAttempt = (path: string): boolean =>
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-// Proactively pings /health/services on the gateway so Render Free containers
-// start waking up in the background while the user is browsing the landing
-// page, logging in, or picking a project.
+// Proactively wakes up all Render Free microservices by fetching the service
+// catalog from /health/services and holding direct /health requests open to
+// each downstream service URL until its cold start (~60s on Render Free)
+// completes. Also keeps a 10-minute heartbeat while the tab is open so
+// services never spin down mid-session.
+let keepAliveStarted = false;
+
 export async function warmUpServices(): Promise<void> {
+  if (!keepAliveStarted && typeof window !== 'undefined') {
+    keepAliveStarted = true;
+    window.setInterval(() => {
+      void warmUpServices();
+    }, 10 * 60 * 1000);
+  }
+
   try {
     const res = await fetch(`${API_URL}/health/services`);
     if (!res.ok) return;
     const data = (await res.json()) as {
-      services?: Array<{ status: string }>;
+      services?: Array<{ name: string; url: string; status: string }>;
     };
-    const anyDown = data.services?.some((s) => s.status !== 'up');
-    if (anyDown) {
-      await sleep(8000);
-      await fetch(`${API_URL}/health/services`).catch(() => null);
+    const downServices = (data.services ?? []).filter((s) => s.status !== 'up');
+    if (downServices.length > 0) {
+      await Promise.allSettled(
+        downServices.map((s) =>
+          fetch(`${s.url.replace(/\/$/, '')}/health`, { mode: 'no-cors', cache: 'no-store' }),
+        ),
+      );
     }
   } catch {
     /* ignore background warm-up errors */
@@ -117,7 +131,9 @@ export async function warmUpServices(): Promise<void> {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const projectId = getActiveProjectId();
-  const maxAttempts = 4;
+  // Render Free cold starts take ~60-70s (Docker boot + prisma db push).
+  // 10 attempts * ~7s backoff covers the entire cold-start window cleanly.
+  const maxAttempts = 10;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const response = await fetch(`${API_URL}${path}`, {
@@ -135,13 +151,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     }
 
     // Render Free returns 502/503/504 while a sleeping microservice container
-    // is booting up. Trigger a wake-up ping and retry before surfacing an error.
+    // is booting up. Trigger direct wake-up pings and retry until it's up.
     if (
       (response.status === 502 || response.status === 503 || response.status === 504) &&
       attempt < maxAttempts
     ) {
-      fetch(`${API_URL}/health/services`).catch(() => null);
-      await sleep(attempt * 4000);
+      void warmUpServices();
+      await sleep(7000);
       continue;
     }
 
