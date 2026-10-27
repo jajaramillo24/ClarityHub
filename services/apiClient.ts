@@ -91,35 +91,75 @@ function clearActiveProjectId(): void {
 const isAuthAttempt = (path: string): boolean =>
   path === '/auth/login' || path === '/auth/register';
 
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+// Proactively pings /health/services on the gateway so Render Free containers
+// start waking up in the background while the user is browsing the landing
+// page, logging in, or picking a project.
+export async function warmUpServices(): Promise<void> {
+  try {
+    const res = await fetch(`${API_URL}/health/services`);
+    if (!res.ok) return;
+    const data = (await res.json()) as {
+      services?: Array<{ status: string }>;
+    };
+    const anyDown = data.services?.some((s) => s.status !== 'up');
+    if (anyDown) {
+      await sleep(8000);
+      await fetch(`${API_URL}/health/services`).catch(() => null);
+    }
+  } catch {
+    /* ignore background warm-up errors */
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const projectId = getActiveProjectId();
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(projectId ? { 'X-Project-Id': projectId } : {}),
-      ...options.headers,
-    },
-  });
+  const maxAttempts = 4;
 
-  if (response.status === 401 && !isAuthAttempt(path)) {
-    notifyUnauthorized();
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(projectId ? { 'X-Project-Id': projectId } : {}),
+        ...options.headers,
+      },
+    });
+
+    if (response.status === 401 && !isAuthAttempt(path)) {
+      notifyUnauthorized();
+    }
+
+    // Render Free returns 502/503/504 while a sleeping microservice container
+    // is booting up. Trigger a wake-up ping and retry before surfacing an error.
+    if (
+      (response.status === 502 || response.status === 503 || response.status === 504) &&
+      attempt < maxAttempts
+    ) {
+      fetch(`${API_URL}/health/services`).catch(() => null);
+      await sleep(attempt * 4000);
+      continue;
+    }
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new ApiError(
+        body?.message || `Request to ${path} failed with ${response.status}`,
+        response.status,
+      );
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    return response.json() as Promise<T>;
   }
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new ApiError(
-      body?.message || `Request to ${path} failed with ${response.status}`,
-      response.status,
-    );
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return response.json() as Promise<T>;
+  throw new ApiError(`Request to ${path} timed out while waking service`, 503);
 }
 
 // The /ai/* routes can run past a minute of Claude generation time, so the

@@ -1832,6 +1832,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
+    ApiClient.warmUpServices();
     if (!ApiClient.hasStoredSession()) {
       setAuthChecked(true);
       return;
