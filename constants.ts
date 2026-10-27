@@ -17,6 +17,11 @@ export const STAGES: StageConfig[] = [
     description: 'Detailed Specification & Estimation'
   },
   {
+    id: Stage.KANBAN_BOARD,
+    label: 'Kanban Board',
+    description: 'Interactive Jira Workflow & Sprints'
+  },
+  {
     id: Stage.JIRA_EXPORT,
     label: 'Data Export',
     description: 'CSV Configuration & Download'
@@ -85,6 +90,13 @@ CURRENT STAGE: Card Creation & Estimation.
 Goal: Generate detailed technical specifications and Story Points (Fibonacci).
 
 Output: JSON ONLY (as per schema).
+`,
+
+  [Stage.KANBAN_BOARD]: `
+${BASE_SYSTEM_INSTRUCTION}
+CURRENT STAGE: Kanban & Jira Workflow.
+
+Goal: Organize, track and progress user stories and tasks through the development workflow.
 `,
 
   [Stage.JIRA_EXPORT]: `

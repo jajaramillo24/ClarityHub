@@ -2,8 +2,14 @@ export enum Stage {
   FREE_JAM = 'FREE_JAM',
   NON_FUNCTIONAL = 'NON_FUNCTIONAL',
   CARD_CREATION = 'CARD_CREATION',
+  KANBAN_BOARD = 'KANBAN_BOARD',
   JIRA_EXPORT = 'JIRA_EXPORT'
 }
+
+export type IssueType = 'Story' | 'Task' | 'Bug' | 'Epic';
+export type Priority = 'Lowest' | 'Low' | 'Medium' | 'High' | 'Highest';
+export type KanbanColumnId = 'To Do' | 'In Progress' | 'In Review' | 'Done';
+export type CardStatus = 'Draft' | 'Ready' | 'Exported' | 'To Do' | 'In Progress' | 'In Review' | 'Done';
 
 export interface Attachment {
   id: string;
@@ -36,6 +42,7 @@ export interface Subtask {
 
 export interface ProjectCard {
   id: string;
+  key?: string; // e.g. 'CLR-101'
   title: string;
   description: string;
   acceptanceCriteria: string[];
@@ -44,7 +51,10 @@ export interface ProjectCard {
   justification: string;
   labels: string[];
   risks: string[];
-  status: 'Draft' | 'Ready' | 'Exported';
+  status: CardStatus;
+  priority?: Priority;
+  issueType?: IssueType;
+  assignee?: string;
 }
 
 export interface StageConfig {

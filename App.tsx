@@ -3,6 +3,7 @@ import { Stage, Idea, NFR, ProjectCard, CsvColumn, Subtask, Attachment } from '.
 import { STAGES } from './constants';
 import * as ApiClient from './services/apiClient';
 import { parse } from 'marked';
+import { KanbanBoardView } from './KanbanBoardView';
 
 // --- Markdown Renderer ---
 const MarkdownRenderer = ({ content }: { content: string }) => {
@@ -33,6 +34,7 @@ const StreamingMarkdownRenderer = ({ content, isStreaming }: { content: string, 
 const Icons = {
   Brain: () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.396"/><path d="M19.938 10.5a4 4 0 0 1 .585.396"/><path d="M6 18a4 4 0 0 1-1.97-3.284"/><path d="M17.97 14.716A4 4 0 0 1 18 18"/></svg>,
   Shield: () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>,
+  Backlog: () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
   Kanban: () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 7v7"/><path d="M16 7v7"/><path d="M12 7v7"/></svg>,
   Database: () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>,
   Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
@@ -885,8 +887,8 @@ const NfrView = ({
 
 // --- VIEW: Card Creation (EDITABLE) ---
 const CardCreationView = ({ 
-  cards, setCards, ideas, nfrs 
-}: { cards: ProjectCard[], setCards: (c: ProjectCard[]) => void, ideas: Idea[], nfrs: NFR[] }) => {
+  cards, setCards, ideas, nfrs, onNavigateToKanban
+}: { cards: ProjectCard[], setCards: (c: ProjectCard[]) => void, ideas: Idea[], nfrs: NFR[], onNavigateToKanban?: () => void }) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1051,9 +1053,21 @@ const CardCreationView = ({
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold text-white tracking-tight">Backlog Definition</h2>
-            <div className="flex gap-1.5 text-[10px]">
-              <span className="px-2 py-0.5 bg-black/40 border border-yellow-500/20 text-yellow-300 rounded-md font-medium">{cards.filter(c => c.status === 'Draft').length}</span>
-              <span className="px-2 py-0.5 bg-black/40 border border-emerald-500/20 text-emerald-300 rounded-md font-medium">{cards.filter(c => c.status === 'Ready').length}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1.5 text-[10px]">
+                <span className="px-2 py-0.5 bg-black/40 border border-yellow-500/20 text-yellow-300 rounded-md font-medium">{cards.filter(c => c.status === 'Draft').length}</span>
+                <span className="px-2 py-0.5 bg-black/40 border border-emerald-500/20 text-emerald-300 rounded-md font-medium">{cards.filter(c => c.status === 'Ready').length}</span>
+              </div>
+              {onNavigateToKanban && (
+                <button
+                  onClick={onNavigateToKanban}
+                  className="px-2 py-1 bg-clarity-500/20 hover:bg-clarity-500/30 text-clarity-300 text-[10px] font-semibold rounded-md border border-clarity-500/30 flex items-center gap-1 transition-all"
+                  title="Switch to Kanban Board view"
+                >
+                  <Icons.Kanban />
+                  <span>Kanban</span>
+                </button>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
@@ -1448,14 +1462,17 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
     { id: '3', header: 'Issue Type', field: 'issue_type', enabled: true },
     { id: '4', header: 'Priority', field: 'priority', enabled: true },
     { id: '5', header: 'Story Points', field: 'totalStoryPoints', enabled: true },
-    { id: '6', header: 'Labels', field: 'labels', enabled: true },
-    { id: '7', header: 'Assignee', field: 'assignee', enabled: false },
-    { id: '8', header: 'Parent ID', field: 'parent_id', enabled: false },
-    { id: '9', header: 'Acceptance Criteria', field: 'acceptanceCriteria', enabled: true },
-    { id: '10', header: 'Risks', field: 'risks', enabled: true },
+    { id: '6', header: 'Status', field: 'status', enabled: true },
+    { id: '7', header: 'Labels', field: 'labels', enabled: true },
+    { id: '8', header: 'Assignee', field: 'assignee', enabled: true },
+    { id: '9', header: 'Parent ID', field: 'parent_id', enabled: false },
+    { id: '10', header: 'Acceptance Criteria', field: 'acceptanceCriteria', enabled: true },
+    { id: '11', header: 'Risks', field: 'risks', enabled: true },
   ]);
 
-  const readyCards = cards.filter(c => c.status === 'Ready');
+  const readyCards = cards.filter(c => c.status !== 'Draft').length > 0
+    ? cards.filter(c => c.status !== 'Draft')
+    : cards;
 
   const toggleColumn = (id: string) => {
     setColumns(columns.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
@@ -1463,17 +1480,13 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
 
   const [exporting, setExporting] = useState(false);
 
-  // CSV generation itself now happens in jira-exporter-service (it needs to
-  // read the live Ready cards from structure-service, not just what this
-  // component has in memory). This just requests the export and downloads
-  // the result it hands back.
+  // CSV generation with backend priority and standalone fallback
   const downloadCsv = async () => {
     setExporting(true);
     try {
       const job = await ApiClient.createExport({ delimiter, includeSubtasks, columns });
       if (job.status !== 'completed' || !job.csvContent) {
-        alert(`Export failed: ${job.errorMessage || 'unknown error'}`);
-        return;
+        throw new Error(job.errorMessage || 'Export job incomplete');
       }
       const blob = new Blob([job.csvContent], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement("a");
@@ -1485,8 +1498,62 @@ const ExportManagerView = ({ cards }: { cards: ProjectCard[] }) => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('Export failed', e);
-      alert('Failed to export. Please try again.');
+      console.warn('API Export failed or offline, falling back to local CSV generation', e);
+      const enabledCols = columns.filter(c => c.enabled);
+      const headerRow = enabledCols.map(c => `"${c.header}"`).join(delimiter);
+      const allRows: string[] = [];
+      readyCards.forEach(card => {
+        const parentRow = enabledCols.map(col => {
+          let val = '';
+          switch(col.field) {
+            case 'issue_type': val = card.issueType || 'Story'; break;
+            case 'priority': val = card.priority || (card.totalStoryPoints > 13 ? 'High' : card.totalStoryPoints > 5 ? 'Medium' : 'Low'); break;
+            case 'labels': val = card.labels.join(', '); break;
+            case 'assignee': val = card.assignee || ''; break;
+            case 'status': val = card.status || 'To Do'; break;
+            case 'parent_id': val = ''; break;
+            case 'acceptanceCriteria': val = card.acceptanceCriteria.join('\n'); break;
+            case 'risks': val = card.risks.join('\n'); break;
+            case 'subtasks_count': val = card.subtasks.length.toString(); break;
+            default: val = String(card[col.field as keyof ProjectCard] || '');
+          }
+          val = val.replace(/"/g, '""');
+          return `"${val}"`;
+        }).join(delimiter);
+        allRows.push(parentRow);
+        if (includeSubtasks && card.subtasks.length > 0) {
+          card.subtasks.forEach(subtask => {
+            const subtaskRow = enabledCols.map(col => {
+              let val = '';
+              switch(col.field) {
+                case 'title': val = subtask.title; break;
+                case 'description': val = `${subtask.type} subtask for: ${card.title}`; break;
+                case 'issue_type': val = 'Sub-task'; break;
+                case 'priority': val = 'Medium'; break;
+                case 'totalStoryPoints': val = subtask.storyPoints.toString(); break;
+                case 'labels': val = `${subtask.type}, Subtask`; break;
+                case 'assignee': val = card.assignee || ''; break;
+                case 'status': val = subtask.completed ? 'Done' : 'To Do'; break;
+                case 'parent_id': val = card.title; break;
+                default: val = '';
+              }
+              val = val.replace(/"/g, '""');
+              return `"${val}"`;
+            }).join(delimiter);
+            allRows.push(subtaskRow);
+          });
+        }
+      });
+      const csvContent = [headerRow, ...allRows].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `clarity_backlog_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
     }
@@ -1841,7 +1908,9 @@ export default function App() {
       case Stage.NON_FUNCTIONAL:
         return <NfrView nfrs={nfrs} setNfrs={setNfrs} />;
       case Stage.CARD_CREATION:
-        return <CardCreationView cards={cards} setCards={setCards} ideas={ideas} nfrs={nfrs} />;
+        return <CardCreationView cards={cards} setCards={setCards} ideas={ideas} nfrs={nfrs} onNavigateToKanban={() => setActiveStage(Stage.KANBAN_BOARD)} />;
+      case Stage.KANBAN_BOARD:
+        return <KanbanBoardView cards={cards} setCards={setCards} onNavigateToExport={() => setActiveStage(Stage.JIRA_EXPORT)} />;
       case Stage.JIRA_EXPORT:
         return <ExportManagerView cards={cards} />;
       default:
@@ -1853,7 +1922,8 @@ export default function App() {
       switch(stageId) {
           case Stage.FREE_JAM: return <Icons.Brain />;
           case Stage.NON_FUNCTIONAL: return <Icons.Shield />;
-          case Stage.CARD_CREATION: return <Icons.Kanban />;
+          case Stage.CARD_CREATION: return <Icons.Backlog />;
+          case Stage.KANBAN_BOARD: return <Icons.Kanban />;
           case Stage.JIRA_EXPORT: return <Icons.Database />;
           default: return <Icons.Brain />;
       }
